@@ -17,6 +17,7 @@ import click
 from rich.console import Console
 from rich.panel import Panel
 from rich.table import Table
+from rich.text import Text
 
 from agentproof import __version__
 from agentproof.config import (
@@ -265,7 +266,7 @@ def _render_quiet(console: Console, report: VerificationReport) -> None:
     """
     style = "bold black on green" if report.verdict is Verdict.SUCCESS else "bold white on red"
     badge = f" {report.verdict.label} "
-    console.print(f"[{style}]{badge}[/{style}] confidence {report.confidence:.0%}", markup=False)
+    console.print(f"[{style}]{badge}[/{style}] confidence {report.confidence:.0%}")
     console.print(report.summary, style="dim")
 
 
@@ -274,6 +275,11 @@ def _render_quiet(console: Console, report: VerificationReport) -> None:
     context_settings={"help_option_names": ["-h", "--help"], "max_content_width": 100},
 )
 @click.option("--check", "check_flag", is_flag=True, help="Run the verification workflow.")
+@click.option(
+    "--demo",
+    is_flag=True,
+    help="Run a self-contained demonstration; no API key required.",
+)
 @click.option("--task", type=str, default=None, help="The task definition given to the agent.")
 @click.option(
     "--task-file",
@@ -365,7 +371,8 @@ def main(ctx: click.Context, /, check_flag: bool, **options: Any) -> None:
     """Verify that an AI agent actually completed the task it claimed to complete.
 
     Run `agentproof --check` to audit the current workspace. Use
-    `agentproof init` to create a configuration file interactively, and
+    `agentproof --demo` for a self-contained demonstration that needs no API
+    key, `agentproof init` to create a configuration file interactively, and
     `agentproof doctor` to diagnose configuration problems.
     """
     options["check_flag"] = check_flag
@@ -506,6 +513,9 @@ def _execute_check(options: dict[str, Any], console: Console) -> int:
     Returns:
         The process exit code.
     """
+    if options.get("demo"):
+        return _execute_demo(options, console)
+
     try:
         settings = _load_settings(options)
         task, claim, workspace = _resolve_inputs(settings, options, console)
@@ -574,6 +584,63 @@ def _execute_check(options: dict[str, Any], console: Console) -> int:
         _render_quiet(console, report)
     else:
         render_report(report, console, context=context_panel)
+
+    return EXIT_SUCCESS if report.verdict is Verdict.SUCCESS else EXIT_FAILED
+
+
+def _execute_demo(options: dict[str, Any], console: Console) -> int:
+    """Run the built-in demonstration.
+
+    The demo exercises the real pipeline against a synthetic workspace and a
+    pre-recorded auditor answer, so it needs no API key and reads nothing from
+    the user's project.
+
+    Args:
+        options: The parsed command-line options.
+        console: Console for output.
+
+    Returns:
+        The process exit code.
+    """
+    from agentproof.demo import DemoProvider, demo_settings, demo_workspace
+
+    json_output = bool(options.get("json_output"))
+    quiet = bool(options.get("quiet"))
+
+    if not json_output and not quiet:
+        console.print()
+        console.print(
+            Panel(
+                Text(
+                    "A canned demonstration: a synthetic workspace and a pre-recorded "
+                    "auditor answer. No API key is needed, and nothing on your "
+                    "machine is read.",
+                    style="dim",
+                ),
+                title="[bold]Demo mode[/bold]",
+                border_style="cyan",
+                padding=(0, 2),
+            )
+        )
+
+    with demo_workspace() as workspace:
+        settings = demo_settings(workspace)
+        try:
+            context = build_context(settings)
+        except (ConfigurationError, WorkspaceError) as exc:
+            _print_error(console, exc)
+            return EXIT_USAGE
+
+        provider = DemoProvider()
+        report = Verifier(provider, settings).verify(context)
+
+        if json_output:
+            render_json_report(report, console)
+        elif quiet:
+            _render_quiet(console, report)
+        else:
+            context_panel = _build_context_panel(settings, context.artifact_set.summary_line())
+            render_report(report, console, context=context_panel)
 
     return EXIT_SUCCESS if report.verdict is Verdict.SUCCESS else EXIT_FAILED
 

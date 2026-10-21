@@ -158,6 +158,18 @@ def test_quiet_mode(runner: CliRunner, project: Path, monkeypatch: pytest.Monkey
     assert "Evidence breakdown" not in result.output
 
 
+def test_quiet_mode_does_not_leak_rich_markup(
+    runner: CliRunner, project: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The quiet mode renders the badge instead of printing its markup."""
+    _install_fake_provider(monkeypatch, _SUCCESS_PAYLOAD)
+
+    result = runner.invoke(main, ["--check", "--quiet", "--no-color"])
+
+    assert "[bold" not in result.output
+    assert "[/bold" not in result.output
+
+
 def test_dry_run_does_not_call_the_api(
     runner: CliRunner, project: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

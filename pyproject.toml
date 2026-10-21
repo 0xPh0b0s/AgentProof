@@ -29,9 +29,10 @@ dependencies = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/agentproof/agentproof"
-Repository = "https://github.com/agentproof/agentproof"
-Issues = "https://github.com/agentproof/agentproof/issues"
+Homepage = "https://codeberg.org/0xPh0b0s/AgentProof"
+Repository = "https://codeberg.org/0xPh0b0s/AgentProof"
+Issues = "https://codeberg.org/0xPh0b0s/AgentProof/issues"
+Changelog = "https://codeberg.org/0xPh0b0s/AgentProof/src/branch/main/CHANGELOG.md"
 
 [project.scripts]
 agentproof = "agentproof.cli:main"
@@ -50,6 +51,12 @@ build-backend = "poetry.core.masonry.api"
 
 [tool.poetry]
 packages = [{ include = "agentproof" }]
+include = [
+    { path = "CHANGELOG.md", format = "sdist" },
+    { path = "assets/*.svg", format = "sdist" },
+    { path = "examples/*.json", format = "sdist" },
+    { path = "tests/**/*.py", format = "sdist" },
+]
 
 [tool.poetry.group.dev.dependencies]
 pytest = "^8.0.0"

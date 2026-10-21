@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="128" height="128" role="img" aria-label="AgentProof logo">
+  <defs>
+    <linearGradient id="shield" x1="0" y1="0" x2="0.35" y2="1">
+      <stop offset="0" stop-color="#22d3ee"/>
+      <stop offset="1" stop-color="#3b82f6"/>
+    </linearGradient>
+  </defs>
+  <path
+    d="M64 5 115 25.5V64c0 30.5-21.9 48.6-51 58.5C35 112.6 13 94.5 13 64V25.5Z"
+    fill="url(#shield)"/>
+  <path
+    d="M64 5 115 25.5V64c0 30.5-21.9 48.6-51 58.5C35 112.6 13 94.5 13 64V25.5Z"
+    fill="none"
+    stroke="#0b1220"
+    stroke-width="5"
+    stroke-linejoin="round"
+    opacity="0.22"/>
+  <path
+    d="M41 64.5 56.5 80 89 47"
+    fill="none"
+    stroke="#0b1220"
+    stroke-width="12"
+    stroke-linecap="round"
+    stroke-linejoin="round"/>
+</svg>
