@@ -1,0 +1,18 @@
+{
+  "task": "Create a deployment script (deploy.sh) and run the test suite.",
+  "claim": "I created deploy.sh and all 42 tests pass.",
+  "workspace": "./workspace",
+  "artifacts": [],
+  "provider": "anthropic",
+  "model": "claude-sonnet-5-5",
+  "min_confidence": 0.75,
+  "max_files": 200,
+  "max_artifact_bytes": 120000,
+  "max_total_bytes": 1500000,
+  "include": [],
+  "exclude": [],
+  "auditor_instructions": "",
+  "timeout": 120,
+  "max_retries": 3,
+  "max_tokens": 8192
+}
