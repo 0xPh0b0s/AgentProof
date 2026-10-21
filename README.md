@@ -20,11 +20,9 @@
   </p>
 
   <p>
-    <a href="https://pypi.org/project/agentproof/"><img src="https://img.shields.io/pypi/v/agentproof.svg" alt="Latest PyPI release"></a>
-    <a href="https://pypi.org/project/agentproof/"><img src="https://img.shields.io/pypi/pyversions/agentproof.svg" alt="Supported Python versions"></a>
-    <a href="https://pypi.org/project/agentproof/"><img src="https://img.shields.io/pypi/dm/agentproof.svg" alt="Monthly downloads"></a>
-    <a href="https://codeberg.org/0xPh0b0s/AgentProof/actions/workflows/ci.yml"><img src="https://codeberg.org/0xPh0b0s/AgentProof/actions/workflows/ci.yml/badge.svg" alt="CI status"></a>
+    <a href="https://codeberg.org/0xPh0b0s/AgentProof"><img src="https://codeberg.org/0xPh0b0s/AgentProof/badges/stars.svg" alt="Codeberg stars"></a>
     <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-22c55e.svg" alt="MIT licensed"></a>
+    <img src="https://img.shields.io/badge/python-3.10%2B-3776ab?logo=python&logoColor=white" alt="Python 3.10+">
     <img src="https://img.shields.io/badge/typing-strict%20mypy-3b82f6.svg" alt="Strictly typed, mypy strict">
     <img src="https://img.shields.io/badge/runtime%20dependencies-4-brightgreen.svg" alt="Four runtime dependencies">
   </p>
@@ -58,7 +56,7 @@ If the proof isn't there, the verdict is `FAILED` and the process exits `1`.
 ## Try it in 30 seconds (no API key)
 
 ```bash
-pip install agentproof
+pip install agentproof-cli
 agentproof --demo
 ```
 
@@ -157,13 +155,16 @@ never evidenced. That guard rail is the whole point of the tool.
 ## Install
 
 ```bash
-pip install agentproof
+pip install agentproof-cli
 ```
+
+The PyPI distribution is named **`agentproof-cli`** — it installs the
+`agentproof` command and the `agentproof` import package.
 
 Requires **Python 3.10+**. Four runtime dependencies: `click`, `rich`, `httpx`,
 `python-dotenv`. Bring your own API key for the auditor — Anthropic or OpenAI.
 
-From a checkout:
+From a checkout (use this until the first PyPI release):
 
 ```bash
 git clone https://codeberg.org/0xPh0b0s/AgentProof.git
@@ -415,23 +416,22 @@ through the same fields interactively.
 ## Use it in CI
 
 ```yaml
-# .github/workflows/verify-agent.yml
+# .forgejo/workflows/verify-agent.yml
 name: Verify agent claim
 on: [workflow_dispatch, pull_request]
 
 jobs:
   proof:
-    runs-on: ubuntu-latest
+    runs-on: docker
+    container:
+      image: python:3.12
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-      - run: pip install agentproof
+      - uses: https://codeberg.org/actions/checkout@v4
+      - run: pip install agentproof-cli
       - run: agentproof --check --json > proof.json
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
-      - uses: actions/upload-artifact@v4
+      - uses: https://codeberg.org/actions/upload-artifact@v4
         with:
           name: agent-proof
           path: proof.json
@@ -543,6 +543,28 @@ agentproof/
 ├── errors.py       # Exception hierarchy
 ├── utils.py        # Glob matching, gitignore rules, JSON extraction
 └── providers/      # Anthropic and OpenAI backends behind one interface
+```
+
+### CI and releasing
+
+Lint, type-checking and the test suite run on
+[Codeberg Actions](https://codeberg.org/0xPh0b0s/AgentProof/actions) via
+`.forgejo/workflows/ci.yml`. Actions must be enabled once in the repository
+settings (**Settings → Repository → Advanced → Enable Actions**).
+
+Publishing is handled by `.forgejo/workflows/release.yml`; it needs a
+`PYPI_API_TOKEN` repository secret. To publish by hand:
+
+```bash
+python -m build
+python -m twine upload dist/*
+```
+
+Once the first release is on PyPI, add these two badges to the header:
+
+```html
+<a href="https://pypi.org/project/agentproof-cli/"><img src="https://img.shields.io/pypi/v/agentproof-cli.svg" alt="Latest PyPI release"></a>
+<a href="https://codeberg.org/0xPh0b0s/AgentProof/actions/workflows/ci.yml"><img src="https://codeberg.org/0xPh0b0s/AgentProof/badges/workflows/ci.yml/badge.svg" alt="CI status"></a>
 ```
 
 ---

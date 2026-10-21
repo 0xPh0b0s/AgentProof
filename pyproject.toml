@@ -1,5 +1,5 @@
 [project]
-name = "agentproof"
+name = "agentproof-cli"
 version = "1.0.0"
 description = "Independent verification that an AI agent actually completed the task it claimed to complete."
 readme = "README.md"

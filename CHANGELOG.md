@@ -8,6 +8,8 @@ and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.
 
 ### Added
 
+- Packaged for PyPI as `agentproof-cli`; the installed command and the import
+  package are both named `agentproof`.
 - `agentproof --check`: the full verification workflow — context gathering,
   artifact collection, independent audit, guard rails, and terminal reporting.
 - `agentproof init`: an interactive wizard that writes `.agentproof.json`.
