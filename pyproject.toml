@@ -131,3 +131,10 @@ convention = "google"
 
 [tool.ruff.lint.flake8-annotations]
 suppress-dummy-args = true
+
+
+[[tool.uv.index]]
+name = "testpypi"
+url = "https://test.pypi.org/simple/"
+publish-url = "https://test.pypi.org/legacy/"
+explicit = true
