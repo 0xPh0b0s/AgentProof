@@ -145,7 +145,7 @@ never evidenced. That guard rail is the whole point of the tool.
 | 🧑‍⚖️ **An independent auditor** | A different model, with the claim treated as a hypothesis to be tested — never as evidence for itself. |
 | 📄 **Requirement-level evidence** | Every requirement the auditor extracted, its status, and the artifact that proves or disproves it. |
 | 🚦 **A binary verdict** | `SUCCESS` or `FAILED`. No "looks good to me", no 7/10 confidence vibes. |
-| ⚖️ **Two guard rails** | A `SUCCESS` below your confidence threshold, or with any unverified requirement, is downgraded to `FAILED`. |
+| ⚖️ **Three guard rails** | A `SUCCESS` below your confidence threshold, with no requirement-level checks, or with any unverified requirement, is downgraded to `FAILED`. |
 | 🛡️ **Prompt-injection hardening** | Artifact content is explicitly labelled untrusted data so agent-authored files cannot instruct the auditor. |
 | 🤝 **CI-native** | Exit codes `0`–`4` and a `--json` mode, so an unproven claim can block a merge. |
 | 🧪 **Zero vendor lock-in** | Anthropic and OpenAI out of the box; any OpenAI-compatible endpoint via `--base-url`. |
@@ -268,8 +268,9 @@ agentproof --check
    paths, and lists of discrepancies, hallucinations, missing items, and
    recommendations.
 
-5. **Guard rails.** Two rules override the auditor's own verdict:
+5. **Guard rails.** Three rules override the auditor's own verdict:
    - a `SUCCESS` whose confidence is below `--min-confidence` → `FAILED`;
+   - a `SUCCESS` with no requirement-level checks at all → `FAILED`;
    - a `SUCCESS` containing any non-`verified` requirement → `FAILED`.
 
    The burden of proof is on the agent: anything short of complete, evidenced

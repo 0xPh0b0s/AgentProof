@@ -24,8 +24,9 @@ and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.
   line options.
 - Artifact collection with `.gitignore` support, binary detection, and
   per-file, per-total, and per-count budgets.
-- Two guard rails that downgrade a `SUCCESS` verdict that falls below the
-  confidence threshold or contains an unverified requirement.
+- Three guard rails that downgrade a `SUCCESS` verdict that falls below the
+  confidence threshold, supplies no requirement-level checks, or contains an
+  unverified requirement.
 - JSON output mode and stable exit codes (`0` verified, `1` not verified,
   `2` configuration, `3` provider, `4` unparseable response) for CI use.
 - A typed public API (`agentproof.Settings`, `agentproof.build_context`,

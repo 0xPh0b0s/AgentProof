@@ -138,13 +138,14 @@ def test_check_json_output(
     runner: CliRunner, project: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """The JSON output mode emits a parseable report."""
-    _install_fake_provider(monkeypatch, {**_SUCCESS_PAYLOAD, "checks": []})
+    _install_fake_provider(monkeypatch, _SUCCESS_PAYLOAD)
 
     result = runner.invoke(main, ["--check", "--json"])
 
     assert result.exit_code == EXIT_SUCCESS
     payload = json.loads(result.output)
     assert payload["verdict"] == "success"
+    assert payload["checks"][0]["status"] == "verified"
 
 
 def test_quiet_mode(runner: CliRunner, project: Path, monkeypatch: pytest.MonkeyPatch) -> None:
