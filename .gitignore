@@ -32,4 +32,3 @@ coverage.xml
 *.swp
 .DS_Store
 /uv.lock
-/todo.txt
