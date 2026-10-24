@@ -11,6 +11,7 @@ from agentproof.prompts import (
     build_system_prompt,
     build_user_prompt,
     format_artifacts,
+    format_completeness,
 )
 
 
@@ -46,9 +47,54 @@ def test_user_prompt_contains_every_section(workspace: Path) -> None:
 
     assert "ORIGINAL TASK" in prompt
     assert "AGENT'S FINAL CLAIM" in prompt
+    assert "EVIDENCE COMPLETENESS" in prompt
     assert "ARTIFACTS" in prompt
     assert "deploy.sh" in prompt
     assert "echo deploying" in prompt
+
+
+def test_completeness_reports_budget_exhaustion(workspace: Path) -> None:
+    """A file limit is surfaced to the auditor as a coverage warning."""
+    artifacts = collect_artifacts(workspace, options=CollectorOptions(max_files=1))
+
+    assert artifacts.budget_exhausted
+    rendered = format_completeness(artifacts)
+    assert "EVIDENCE COMPLETENESS" in rendered
+    assert "Collection budget exhausted: yes" in rendered
+    assert "file limit reached" in rendered
+    assert "unverifiable" in rendered
+
+
+def test_completeness_reports_truncation(tmp_path: Path) -> None:
+    """Truncated content is named and carries the unverifiable guidance."""
+    root = tmp_path / "truncated-workspace"
+    root.mkdir()
+    (root / "big.log").write_text("x" * 500, encoding="utf-8")
+
+    artifacts = collect_artifacts(
+        root,
+        options=CollectorOptions(max_file_bytes=100, use_gitignore=False),
+    )
+
+    assert artifacts.files[0].truncated
+    rendered = format_completeness(artifacts)
+    assert "Content truncated" in rendered
+    assert "big.log" in rendered
+    assert "unverifiable" in rendered
+
+
+def test_completeness_reports_full_coverage(tmp_path: Path) -> None:
+    """A complete scan is stated plainly rather than warned about."""
+    root = tmp_path / "complete-workspace"
+    root.mkdir()
+    (root / "only.txt").write_text("all evidence", encoding="utf-8")
+
+    artifacts = collect_artifacts(root, options=CollectorOptions(use_gitignore=False))
+
+    rendered = format_completeness(artifacts)
+    assert "Files omitted" not in rendered
+    assert "Collection budget exhausted: no" in rendered
+    assert "No evidence was lost" in rendered
 
 
 def test_empty_workspace_is_explicit(workspace: Path) -> None:

@@ -129,6 +129,19 @@ def test_failed_without_checks_keeps_summary_note(workspace: Path, settings: Set
     assert "without any requirement-level checks" not in report.notes
 
 
+def test_report_records_evidence_completeness(workspace: Path, settings: Settings) -> None:
+    """The report records whether the auditor saw all available evidence."""
+    settings.max_files = 1
+    provider = FakeProvider([json.dumps(make_report_payload())])
+    verifier = Verifier(provider, settings)
+
+    report = verifier.verify(_context(workspace, settings))
+
+    assert report.artifacts_scanned == 1
+    assert report.artifacts_skipped > 0
+    assert report.budget_exhausted is True
+
+
 def test_invalid_json_triggers_a_corrective_retry(workspace: Path, settings: Settings) -> None:
     """A malformed first answer is retried once with a reminder."""
     provider = FakeProvider(

@@ -144,6 +144,7 @@ never evidenced. That guard rail is the whole point of the tool.
 | --- | --- |
 | 🧑‍⚖️ **An independent auditor** | A different model, with the claim treated as a hypothesis to be tested — never as evidence for itself. |
 | 📄 **Requirement-level evidence** | Every requirement the auditor extracted, its status, and the artifact that proves or disproves it. |
+| 🧾 **Evidence completeness** | The auditor is told when files were omitted or content truncated, and the report flags it — so "missing" cannot quietly mean "not shown to the model". |
 | 🚦 **A binary verdict** | `SUCCESS` or `FAILED`. No "looks good to me", no 7/10 confidence vibes. |
 | ⚖️ **Three guard rails** | A `SUCCESS` below your confidence threshold, with no requirement-level checks, or with any unverified requirement, is downgraded to `FAILED`. |
 | 🛡️ **Prompt-injection hardening** | Artifact content is explicitly labelled untrusted data so agent-authored files cannot instruct the auditor. |
@@ -255,7 +256,9 @@ agentproof --check
 2. **Artifact collection.** The workspace is walked and every relevant file is
    read — content, not just filenames. `.gitignore` is honoured, virtualenvs
    and caches are skipped, binaries are flagged as non-inspectable, and
-   per-file / per-total / per-count budgets keep the prompt bounded.
+   per-file / per-total / per-count budgets keep the prompt bounded. A
+   completeness note records anything that was omitted or truncated, so the
+   auditor never mistakes a collection limit for absent work.
 
 3. **Independent audit.** The task, the claim, and the artifact contents go to
    a *separate* model with a prompt that treats the claim as a hypothesis. The
@@ -278,7 +281,9 @@ agentproof --check
 
 6. **Reporting.** A coloured terminal report with a status badge, a confidence
    bar, the requirement-by-requirement evidence table, and the discrepancy
-   lists — or a JSON document for CI.
+   lists — or a JSON document for CI. When the collector had to omit or
+   truncate evidence, the report says so instead of letting a `FAILED` verdict
+   hide a collection limit.
 
 ---
 

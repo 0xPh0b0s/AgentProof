@@ -99,6 +99,9 @@ class VerificationReport:
         provider: Name of the provider that produced the verdict.
         model: Model identifier used for the audit.
         artifacts_scanned: Number of artifacts included in the audit prompt.
+        artifacts_truncated: Number of artifacts whose content was truncated.
+        artifacts_skipped: Number of files the collector omitted.
+        budget_exhausted: Whether a collection limit stopped the scan early.
         prompt_tokens: Prompt tokens consumed, when reported by the provider.
         completion_tokens: Completion tokens consumed, when reported.
     """
@@ -115,6 +118,9 @@ class VerificationReport:
     provider: str = ""
     model: str = ""
     artifacts_scanned: int = 0
+    artifacts_truncated: int = 0
+    artifacts_skipped: int = 0
+    budget_exhausted: bool = False
     prompt_tokens: int = 0
     completion_tokens: int = 0
 
@@ -143,6 +149,9 @@ class VerificationReport:
             "provider": self.provider,
             "model": self.model,
             "artifacts_scanned": self.artifacts_scanned,
+            "artifacts_truncated": self.artifacts_truncated,
+            "artifacts_skipped": self.artifacts_skipped,
+            "budget_exhausted": self.budget_exhausted,
             "usage": {
                 "prompt_tokens": self.prompt_tokens,
                 "completion_tokens": self.completion_tokens,

@@ -103,6 +103,11 @@ class Verifier:
         report.provider = self.provider.spec.name
         report.model = model
         report.artifacts_scanned = context.artifact_count
+        report.artifacts_truncated = sum(
+            1 for artifact in context.artifact_set.files if artifact.truncated
+        )
+        report.artifacts_skipped = len(context.artifact_set.skipped)
+        report.budget_exhausted = context.artifact_set.budget_exhausted
         report.prompt_tokens = usage.prompt_tokens
         report.completion_tokens = usage.completion_tokens
 

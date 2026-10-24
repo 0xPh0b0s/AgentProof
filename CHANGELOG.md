@@ -24,6 +24,9 @@ and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.
   line options.
 - Artifact collection with `.gitignore` support, binary detection, and
   per-file, per-total, and per-count budgets.
+- Evidence-completeness reporting: the auditor is told when files were omitted
+  or content was truncated, and the terminal and JSON reports record it so a
+  `FAILED` verdict cannot quietly hide a collection limit.
 - Three guard rails that downgrade a `SUCCESS` verdict that falls below the
   confidence threshold, supplies no requirement-level checks, or contains an
   unverified requirement.
