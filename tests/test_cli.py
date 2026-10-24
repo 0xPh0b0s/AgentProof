@@ -200,6 +200,18 @@ def test_missing_credentials_are_reported(
     assert "ANTHROPIC_API_KEY" in result.output
 
 
+def test_bad_environment_value_is_a_usage_error(
+    runner: CliRunner, project: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A malformed environment value exits with the usage code."""
+    monkeypatch.setenv("AGENTPROOF_MIN_CONFIDENCE", "not-a-number")
+
+    result = runner.invoke(main, ["--check", "--no-color"])
+
+    assert result.exit_code == EXIT_USAGE
+    assert "AGENTPROOF_MIN_CONFIDENCE" in result.output
+
+
 def test_provider_failure_is_reported(
     runner: CliRunner, project: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

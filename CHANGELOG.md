@@ -35,4 +35,15 @@ and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.
 - A typed public API (`agentproof.Settings`, `agentproof.build_context`,
   `agentproof.Verifier`) for use as a library.
 
+### Fixed
+
+- Binary files are charged only for the inspected sample against the collection
+  budget, so one large blob cannot crowd out textual evidence.
+- Artifact framing uses a random per-run nonce, so agent-authored marker text
+  cannot forge or close a file frame.
+- Malformed numeric configuration values, including environment variables, are
+  reported as configuration errors instead of tracebacks.
+- The nearest `.env` file now wins over one in a parent directory, and
+  `.env.local` wins over `.env` in the same directory.
+
 [1.0.0]: https://codeberg.org/0xPh0b0s/AgentProof/releases/tag/v1.0.0

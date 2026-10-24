@@ -147,7 +147,7 @@ never evidenced. That guard rail is the whole point of the tool.
 | 🧾 **Evidence completeness** | The auditor is told when files were omitted or content truncated, and the report flags it — so "missing" cannot quietly mean "not shown to the model". |
 | 🚦 **A binary verdict** | `SUCCESS` or `FAILED`. No "looks good to me", no 7/10 confidence vibes. |
 | ⚖️ **Three guard rails** | A `SUCCESS` below your confidence threshold, with no requirement-level checks, or with any unverified requirement, is downgraded to `FAILED`. |
-| 🛡️ **Prompt-injection hardening** | Artifact content is explicitly labelled untrusted data so agent-authored files cannot instruct the auditor. |
+| 🛡️ **Prompt-injection hardening** | Artifact content is labelled untrusted and framed with a random per-run nonce, so agent-authored text cannot instruct the auditor or forge a file boundary. |
 | 🤝 **CI-native** | Exit codes `0`–`4` and a `--json` mode, so an unproven claim can block a merge. |
 | 🧪 **Zero vendor lock-in** | Anthropic and OpenAI out of the box; any OpenAI-compatible endpoint via `--base-url`. |
 
@@ -263,8 +263,9 @@ agentproof --check
 3. **Independent audit.** The task, the claim, and the artifact contents go to
    a *separate* model with a prompt that treats the claim as a hypothesis. The
    auditor must decompose the task into requirements and cite evidence for
-   each one. Artifact content is explicitly marked as untrusted data so that
-   agent-authored text cannot instruct the auditor.
+   each one. Artifact content is explicitly marked as untrusted data and each
+   file is framed with a random per-run nonce, so agent-authored text cannot
+   instruct the auditor or forge a file boundary.
 
 4. **Structured verdict.** The auditor answers with a JSON report: a verdict, a
    confidence score, a per-requirement checklist with evidence and source
