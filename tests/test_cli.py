@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import stat
 from pathlib import Path
 
 import pytest
@@ -138,13 +139,14 @@ def test_check_json_output(
     runner: CliRunner, project: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """The JSON output mode emits a parseable report."""
-    _install_fake_provider(monkeypatch, {**_SUCCESS_PAYLOAD, "checks": []})
+    _install_fake_provider(monkeypatch, _SUCCESS_PAYLOAD)
 
     result = runner.invoke(main, ["--check", "--json"])
 
     assert result.exit_code == EXIT_SUCCESS
     payload = json.loads(result.output)
     assert payload["verdict"] == "success"
+    assert payload["checks"][0]["status"] == "verified"
 
 
 def test_quiet_mode(runner: CliRunner, project: Path, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -197,6 +199,69 @@ def test_missing_credentials_are_reported(
 
     assert result.exit_code == EXIT_USAGE
     assert "ANTHROPIC_API_KEY" in result.output
+
+
+def test_bad_environment_value_is_a_usage_error(
+    runner: CliRunner, project: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A malformed environment value exits with the usage code."""
+    monkeypatch.setenv("AGENTPROOF_MIN_CONFIDENCE", "not-a-number")
+
+    result = runner.invoke(main, ["--check", "--no-color"])
+
+    assert result.exit_code == EXIT_USAGE
+    assert "AGENTPROOF_MIN_CONFIDENCE" in result.output
+
+
+def test_invalid_explicit_config_is_a_usage_error(
+    runner: CliRunner, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """An invalid value in --config exits with the usage code."""
+    config = tmp_path / "custom.json"
+    config.write_text(
+        json.dumps(
+            {
+                "task": "Create a deployment script.",
+                "claim": "I created deploy.sh.",
+                "workspace": ".",
+                "min_confidence": 1.5,
+            }
+        ),
+        encoding="utf-8",
+    )
+    monkeypatch.chdir(tmp_path)
+
+    result = runner.invoke(main, ["--check", "--config", str(config), "--no-color"])
+
+    assert result.exit_code == EXIT_USAGE
+    assert "min_confidence" in result.output
+
+
+def test_configuration_value_error_is_a_usage_error(
+    runner: CliRunner, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A raw ValueError raised while resolving config still exits with code 2."""
+
+    def fail(**kwargs: object) -> object:
+        raise ValueError("bad configuration value")
+
+    monkeypatch.setattr("agentproof.cli.load_settings", fail)
+    monkeypatch.chdir(tmp_path)
+
+    result = runner.invoke(main, ["--check", "--no-color"])
+
+    assert result.exit_code == EXIT_USAGE
+    assert "bad configuration value" in result.output
+
+
+def test_malformed_dotenv_is_a_usage_error(runner: CliRunner, project: Path) -> None:
+    """A .env file that cannot be parsed exits with the usage code."""
+    (project / ".env").write_bytes(b"AGENTPROOF_TASK=bad\x00value\n")
+
+    result = runner.invoke(main, ["--check", "--no-color"])
+
+    assert result.exit_code == EXIT_USAGE
+    assert ".env" in result.output
 
 
 def test_provider_failure_is_reported(
@@ -317,6 +382,27 @@ def test_init_writes_a_configuration_file(
     assert config["claim"] == "I shipped it"
     assert config["provider"] == "anthropic"
     assert config["model"] == "claude-sonnet-5-5"
+
+
+def test_init_writes_a_private_dotenv(
+    runner: CliRunner, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A .env file written by the wizard is readable only by its owner."""
+    monkeypatch.chdir(tmp_path)
+
+    result = runner.invoke(
+        main,
+        ["init", "--no-color"],
+        input=(
+            "Ship the feature\n\nI shipped it\n\n./ws\n\n"
+            "anthropic\nclaude-sonnet-5-5\n0.75\ny\nsk-test-secret\n"
+        ),
+    )
+
+    assert result.exit_code == EXIT_SUCCESS, result.output
+    env_file = tmp_path / ".env"
+    assert env_file.read_text(encoding="utf-8") == "ANTHROPIC_API_KEY=sk-test-secret\n"
+    assert stat.S_IMODE(env_file.stat().st_mode) == 0o600
 
 
 def test_version_option(runner: CliRunner) -> None:

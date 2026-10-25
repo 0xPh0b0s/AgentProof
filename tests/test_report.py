@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from dataclasses import replace
 
 from agentproof.models import (
     CheckStatus,
@@ -82,6 +83,28 @@ def test_render_json_report_emits_valid_json() -> None:
     assert payload["confidence"] == 0.87
     assert len(payload["checks"]) == 2
     assert payload["usage"]["prompt_tokens"] == 100
+    assert payload["artifacts_truncated"] == 0
+    assert payload["artifacts_skipped"] == 0
+    assert payload["budget_exhausted"] is False
+
+
+def test_render_report_warns_when_evidence_is_incomplete() -> None:
+    """Incomplete coverage is called out instead of being silently implied."""
+    report = replace(
+        _report(),
+        artifacts_truncated=2,
+        artifacts_skipped=3,
+        budget_exhausted=True,
+    )
+    console = Console(record=True, width=200, no_color=True)
+
+    render_report(report, console)
+
+    output = console.export_text()
+    assert "Evidence completeness" in output
+    assert "2 artifact(s) were truncated" in output
+    assert "3 file(s) were omitted" in output
+    assert "unverifiable" in output
 
 
 def test_report_counts() -> None:

@@ -6,6 +6,8 @@ conservative guard rails that no amount of auditor confidence can override:
 
 * a SUCCESS verdict with a confidence below the configured threshold is
   downgraded to FAILED;
+* a SUCCESS verdict that contains no requirement-level checks at all is
+  downgraded to FAILED, because nothing has been evidenced;
 * a SUCCESS verdict that contains any unsatisfied check is downgraded to
   FAILED.
 """
@@ -101,6 +103,11 @@ class Verifier:
         report.provider = self.provider.spec.name
         report.model = model
         report.artifacts_scanned = context.artifact_count
+        report.artifacts_truncated = sum(
+            1 for artifact in context.artifact_set.files if artifact.truncated
+        )
+        report.artifacts_skipped = len(context.artifact_set.skipped)
+        report.budget_exhausted = context.artifact_set.budget_exhausted
         report.prompt_tokens = usage.prompt_tokens
         report.completion_tokens = usage.completion_tokens
 
@@ -114,6 +121,7 @@ class Verifier:
             report: The report to adjust in place.
         """
         threshold = self.settings.min_confidence
+        auditor_verdict = report.verdict
 
         if report.verdict is Verdict.SUCCESS and report.confidence < threshold:
             report.verdict = Verdict.FAILED
@@ -122,6 +130,14 @@ class Verifier:
                 f"Downgraded to FAILED: the auditor's confidence "
                 f"({report.confidence:.0%}) is below the required threshold "
                 f"({threshold:.0%}).",
+            )
+
+        if report.verdict is Verdict.SUCCESS and not report.checks:
+            report.verdict = Verdict.FAILED
+            report.notes = _join_notes(
+                report.notes,
+                "Downgraded to FAILED: the auditor reported SUCCESS without any "
+                "requirement-level checks, so the claim is unproven.",
             )
 
         unsatisfied = [check for check in report.checks if not check.status.is_satisfied]
@@ -133,7 +149,7 @@ class Verifier:
                 f"{len(unsatisfied)} requirement(s) remained unsatisfied.",
             )
 
-        if report.verdict is Verdict.FAILED and not report.checks:
+        if auditor_verdict is Verdict.FAILED and not report.checks:
             report.notes = _join_notes(
                 report.notes,
                 "The auditor returned no requirement-level checks; the verdict "

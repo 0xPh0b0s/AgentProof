@@ -130,3 +130,19 @@ def test_summary_line(workspace: Path) -> None:
     summary = result.summary_line()
     assert "files" in summary
     assert "B" in summary
+
+
+def test_large_binary_does_not_starve_textual_evidence(tmp_path: Path) -> None:
+    """A big binary is charged only for the inspected sample."""
+    workspace = tmp_path / "ws"
+    workspace.mkdir()
+    (workspace / "a.bin").write_bytes(b"\x00" * 2_000_000)
+    (workspace / "z_evidence.py").write_text("print('work')\n", encoding="utf-8")
+
+    result = collect_artifacts(
+        workspace,
+        options=CollectorOptions(max_total_bytes=1_500_000, use_gitignore=False),
+    )
+
+    assert [artifact.path for artifact in result.files] == ["a.bin", "z_evidence.py"]
+    assert result.budget_exhausted is False

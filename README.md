@@ -3,18 +3,17 @@
 
   <h1>AgentProof</h1>
 
-  <p><strong>Don't trust the agent's report card. Verify it.</strong></p>
+  <p><strong>Verify the agent's work against its claim.</strong></p>
 
   <p>
-    An independent LLM auditor checks what an AI agent <em>claims</em> it did
-    against the files it <em>actually</em> produced — and fails the build when
-    the proof is missing.
+    An independent LLM auditor compares what an AI agent says it did with the
+    files it produced, then fails the build when the proof is missing.
   </p>
 
   <p>
     <a href="#try-it-in-30-seconds-no-api-key">Try it in 30 seconds</a> ·
     <a href="#how-it-works">How it works</a> ·
-    <a href="#why-not-just-ask-the-agent">Why not just ask the agent?</a> ·
+    <a href="#a-separate-auditor">A separate auditor</a> ·
     <a href="#use-it-in-ci">CI</a> ·
     <a href="#configuration">Configuration</a>
   </p>
@@ -32,24 +31,20 @@
 
 ## The problem
 
-Your agent says it finished the job.
+An agent finishes a task and reports success:
 
-> *"I implemented the feature, added the migration, and ran the suite — all 42
+> *"I implemented the feature, added the migration, and ran the suite. All 42
 > tests pass."*
 
-Now what? You have three options, and all of them are bad:
+You can trust that report, ask the same agent to check its work, or read every
+file yourself. The first two repeat the agent's account. The third makes you
+the QA department for every run.
 
-1. **Trust it.** It is a machine grading its own homework.
-2. **Ask it again.** It already gave you the answer it wanted you to hear.
-3. **Read everything by hand.** Sure — but now you are the QA department for
-   every agent run, forever.
+AgentProof sends the task, the agent's claim, and the contents of the workspace
+to a different model. The auditor must name the artifact that supports or
+contradicts each requirement before it can return `SUCCESS`.
 
-AgentProof is the fourth option: **ask a different model.** A separate auditor
-gets the original task, the agent's final claim, and the *actual contents* of
-the workspace — then has to name the artifact that proves or disproves every
-requirement before it is allowed to say `SUCCESS`.
-
-If the proof isn't there, the verdict is `FAILED` and the process exits `1`.
+Without that evidence, the verdict is `FAILED` and the process exits `1`.
 
 ---
 
@@ -60,10 +55,9 @@ pip install agentproof-cli
 agentproof --demo
 ```
 
-The demo runs the **real** pipeline — artifact collection, prompt assembly,
-verdict parsing, guard rails, terminal rendering — against a synthetic
-workspace and a pre-recorded auditor answer. It reads nothing on your machine
-and needs no credentials:
+The demo runs artifact collection, prompt assembly, verdict parsing, guard
+rails, and terminal rendering against a synthetic workspace and a pre-recorded
+auditor answer. It reads nothing on your machine and needs no credentials:
 
 ```console
 ╭───────────────────────────────── Demo mode ──────────────────────────────────╮
@@ -132,9 +126,9 @@ auditor: demo · model: agentproof-demo-auditor · artifacts scanned: 5 · usage
 1349 tokens
 ```
 
-Look at the **Auditor notes** panel: the demo's auditor was *confident* and said
-`SUCCESS`. AgentProof still returned `FAILED`, because two requirements were
-never evidenced. That guard rail is the whole point of the tool.
+The demo auditor reported `SUCCESS` with 91% confidence. AgentProof returned
+`FAILED` because two requirements had no evidence. The guard rails downgrade a
+confident verdict when evidence is missing.
 
 ---
 
@@ -142,13 +136,14 @@ never evidenced. That guard rail is the whole point of the tool.
 
 | | |
 | --- | --- |
-| 🧑‍⚖️ **An independent auditor** | A different model, with the claim treated as a hypothesis to be tested — never as evidence for itself. |
+| 🧑‍⚖️ **An independent auditor** | A different model treats the claim as a hypothesis and looks for evidence in the workspace. |
 | 📄 **Requirement-level evidence** | Every requirement the auditor extracted, its status, and the artifact that proves or disproves it. |
-| 🚦 **A binary verdict** | `SUCCESS` or `FAILED`. No "looks good to me", no 7/10 confidence vibes. |
-| ⚖️ **Two guard rails** | A `SUCCESS` below your confidence threshold, or with any unverified requirement, is downgraded to `FAILED`. |
-| 🛡️ **Prompt-injection hardening** | Artifact content is explicitly labelled untrusted data so agent-authored files cannot instruct the auditor. |
-| 🤝 **CI-native** | Exit codes `0`–`4` and a `--json` mode, so an unproven claim can block a merge. |
-| 🧪 **Zero vendor lock-in** | Anthropic and OpenAI out of the box; any OpenAI-compatible endpoint via `--base-url`. |
+| 🧾 **Evidence completeness** | The collector records omitted files, truncated content, and exhausted budgets. The auditor and the report show those limits, so a collection gap cannot pass for absent work. |
+| 🚦 **A binary verdict** | `SUCCESS` or `FAILED`, with no subjective score. |
+| ⚖️ **Three guard rails** | A `SUCCESS` below your confidence threshold, without requirement-level checks, or with an unverified requirement becomes `FAILED`. |
+| 🛡️ **Prompt-injection hardening** | Artifact content is labelled untrusted and framed with a random per-run nonce, so agent-authored text cannot instruct the auditor or forge a file boundary. |
+| 🤝 **CI-native** | Exit codes `0` to `4` and a `--json` mode let an unproven claim block a merge. |
+| 🧪 **Provider choice** | Anthropic and OpenAI out of the box, plus any OpenAI-compatible endpoint through `--base-url`. |
 
 ---
 
@@ -158,11 +153,11 @@ never evidenced. That guard rail is the whole point of the tool.
 pip install agentproof-cli
 ```
 
-The PyPI distribution is named **`agentproof-cli`** — it installs the
+The PyPI distribution is named **`agentproof-cli`**. It installs the
 `agentproof` command and the `agentproof` import package.
 
 Requires **Python 3.10+**. Four runtime dependencies: `click`, `rich`, `httpx`,
-`python-dotenv`. Bring your own API key for the auditor — Anthropic or OpenAI.
+`python-dotenv`. Provide an API key for Anthropic or OpenAI.
 
 From a checkout (use this until the first PyPI release):
 
@@ -183,7 +178,7 @@ agentproof init
 ```
 
 The wizard asks for the task definition, the agent's claim, the workspace, and
-the auditor — then writes `.agentproof.json`:
+the auditor. It writes `.agentproof.json`:
 
 ```json
 {
@@ -211,8 +206,8 @@ agentproof --check \
 export ANTHROPIC_API_KEY=sk-ant-...   # or OPENAI_API_KEY=sk-...
 ```
 
-A `.env` file in the project root (or any parent) is loaded automatically, so
-the key never has to touch your shell history:
+AgentProof loads a `.env` file from the project root or any parent directory,
+so the key does not need to appear in your shell history:
 
 ```bash
 echo 'ANTHROPIC_API_KEY=sk-ant-...' > .env
@@ -252,66 +247,71 @@ agentproof --check
    `.agentproof.json`, `~/.config/agentproof/config.json`, built-in defaults.
    Anything still missing is asked for interactively.
 
-2. **Artifact collection.** The workspace is walked and every relevant file is
-   read — content, not just filenames. `.gitignore` is honoured, virtualenvs
-   and caches are skipped, binaries are flagged as non-inspectable, and
-   per-file / per-total / per-count budgets keep the prompt bounded.
+2. **Artifact collection.** The collector walks the workspace and reads each
+   relevant file. It follows `.gitignore`, skips virtualenvs and caches, marks
+   binaries as non-inspectable, and applies per-file, per-total, and per-count
+   budgets to keep the prompt bounded. The completeness note records omitted
+   files, truncated content, and exhausted budgets so the auditor can tell a
+   collection limit from absent work.
 
 3. **Independent audit.** The task, the claim, and the artifact contents go to
    a *separate* model with a prompt that treats the claim as a hypothesis. The
    auditor must decompose the task into requirements and cite evidence for
-   each one. Artifact content is explicitly marked as untrusted data so that
-   agent-authored text cannot instruct the auditor.
+   each one. Artifact content is marked as untrusted data, and each file is
+   framed with a random per-run nonce, so agent-authored text cannot instruct
+   the auditor or forge a file boundary.
 
 4. **Structured verdict.** The auditor answers with a JSON report: a verdict, a
    confidence score, a per-requirement checklist with evidence and source
    paths, and lists of discrepancies, hallucinations, missing items, and
    recommendations.
 
-5. **Guard rails.** Two rules override the auditor's own verdict:
-   - a `SUCCESS` whose confidence is below `--min-confidence` → `FAILED`;
-   - a `SUCCESS` containing any non-`verified` requirement → `FAILED`.
+5. **Guard rails.** Three rules override the auditor's verdict:
+   - a `SUCCESS` whose confidence is below `--min-confidence` becomes `FAILED`;
+   - a `SUCCESS` with no requirement-level checks becomes `FAILED`;
+   - a `SUCCESS` containing any non-`verified` requirement becomes `FAILED`.
 
-   The burden of proof is on the agent: anything short of complete, evidenced
-   success is a failure.
+   A claim needs complete, cited evidence to pass.
 
-6. **Reporting.** A coloured terminal report with a status badge, a confidence
-   bar, the requirement-by-requirement evidence table, and the discrepancy
-   lists — or a JSON document for CI.
+6. **Reporting.** A coloured terminal report with a status badge, confidence
+   bar, requirement-by-requirement evidence table, and discrepancy lists. Use
+   `--json` for CI. When the collector omitted or truncated evidence, the
+   report records that limit instead of letting a `FAILED` verdict hide it.
 
 ---
 
-## Why not just ask the agent?
+## A separate auditor
 
 | | Ask the agent | Ask the agent to check its own work | **AgentProof** |
 | --- | --- | --- | --- |
 | Who audits? | The agent that did the work | The agent that did the work | **A separate model** |
-| Reads the artifacts? | Usually not | Sometimes | **Always, in full** |
-| Adversarial? | No | No | **Yes — it is told to look for holes** |
+| Reads the artifacts? | Usually not | Sometimes | **All collected files** |
+| Adversarial? | No | No | **Yes; it is told to look for gaps** |
 | Burden of proof | On you | On the agent | **On the agent** |
-| Machine-checkable? | No | No | **Yes — exit code + JSON** |
+| Machine-checkable? | No | No | **Yes; exit code and JSON** |
 | Works in CI? | No | No | **Yes** |
 
-An agent asked to review its own work is being asked to be its own worst enemy.
-It has every incentive to declare victory, and it has already composed the
-story it is most likely to repeat. AgentProof removes the agent from the
-auditing seat entirely.
+The agent that did the work has already written the account it wants you to
+accept. A separate model reads the workspace without the agent's incentive to
+defend that summary. The auditor does not share the agent's stake in the
+outcome.
 
 ---
 
 ## Use cases
 
 - **CI gate for agent-generated changes.** Block the merge when an agent's
-  summary is not backed by files. Non-zero exit code, JSON artefact, done.
+  summary is not backed by files. A non-zero exit code and a JSON report give
+  the pipeline a clear signal.
 - **A second pair of eyes before you read the diff.** Get a
-  requirement-by-requirement breakdown of what landed and what was quietly
-  skipped.
+  requirement-by-requirement breakdown of what landed and what the summary
+  left out.
 - **Agent harness integration.** Score a run, feed the verdict back into the
   loop, and let the agent retry with the missing-item list in hand.
-- **Audit trail.** A machine-readable proof of what was actually delivered, at
-  the moment it was delivered.
-- **Regression testing for agent prompts.** Did your prompt change make the
-  agent more honest, or did it just make the agent more articulate?
+- **Audit trail.** A machine-readable record of what was delivered when it was
+  delivered.
+- **Regression testing for agent prompts.** Measure whether a prompt change
+  produced more accurate work or more persuasive prose.
 
 ---
 
@@ -325,7 +325,7 @@ auditing seat entirely.
 | `agentproof init` | Interactive setup wizard that writes `.agentproof.json`. |
 | `agentproof doctor` | Diagnose configuration, credentials, and resolved settings. |
 
-### Frequently used options
+### Common options
 
 | Option | Description |
 | --- | --- |
@@ -366,31 +366,31 @@ AgentProof looks for `.agentproof.json` in the current directory and every
 parent directory, and for `~/.config/agentproof/config.json`. A `.env` file is
 loaded from the current directory and every parent directory.
 
-A fully populated sample lives in
-[`examples/agentproof.example.json`](examples/agentproof.example.json) — copy
-it to `.agentproof.json` and edit it, or run `agentproof init` to be walked
-through the same fields interactively.
+A complete sample lives in
+[`examples/agentproof.example.json`](examples/agentproof.example.json). Copy it
+to `.agentproof.json` and edit it, or run `agentproof init` to be walked through
+the same fields.
 
 | Key | Type | Default | Description |
 | --- | --- | --- | --- |
-| `task` | string | — | The task definition given to the agent. |
-| `claim` | string | — | The agent's claim of what it accomplished. |
-| `task_file` | path | — | File containing the task definition. |
-| `claim_file` | path | — | File containing the agent's claim. |
+| `task` | string | none | The task definition given to the agent. |
+| `claim` | string | none | The agent's claim of what it accomplished. |
+| `task_file` | path | none | File containing the task definition. |
+| `claim_file` | path | none | File containing the agent's claim. |
 | `workspace` | path | `.` | Directory (or file) with the agent's output. |
 | `artifacts` | list | `[]` | Extra files or directories to inspect. |
 | `provider` | string | `anthropic` | `anthropic` or `openai`. |
 | `model` | string | provider default | Model used as the auditor. |
 | `base_url` | string | provider default | Override the API base URL. |
-| `api_key` | string | — | API key. Prefer the environment variable. |
-| `api_key_env` | string | — | Name of an environment variable holding the key. |
+| `api_key` | string | none | API key. Prefer the environment variable. |
+| `api_key_env` | string | none | Name of an environment variable holding the key. |
 | `min_confidence` | float | `0.75` | Minimum confidence for a `SUCCESS` verdict. |
 | `max_files` | int | `200` | Maximum number of artifacts. |
 | `max_artifact_bytes` | int | `120000` | Maximum bytes read per artifact. |
 | `max_total_bytes` | int | `1500000` | Maximum bytes read in total. |
 | `include` | list | `[]` | Globs restricting which files are collected. |
 | `exclude` | list | `[]` | Globs vetoing files from the collection. |
-| `auditor_instructions` | string | — | Extra domain context for the auditor. |
+| `auditor_instructions` | string | none | Extra domain context for the auditor. |
 | `temperature` | float | provider default | Sampling temperature. |
 | `timeout` | float | `120` | API timeout in seconds. |
 | `max_retries` | int | `3` | Retries for transient API failures. |
@@ -439,9 +439,8 @@ jobs:
 
 A non-zero exit code fails the job, so an unproven claim blocks the pipeline.
 
-Want the report in the PR comment instead of a raw file? Pipe it through
-[`jq`](https://jqlang.github.io/jq/) and post it wherever you like — the JSON
-schema is stable.
+To put the report in a PR comment, pipe it through
+[`jq`](https://jqlang.github.io/jq/). The JSON schema is stable.
 
 ---
 
@@ -484,9 +483,9 @@ supported out of the box, and `--model` accepts any model your provider
 exposes.
 
 **Can I use a local model?**
-Yes. Point `--base-url` at any OpenAI-compatible endpoint — Ollama, vLLM,
-LM Studio, an internal gateway. Local servers ignore the credentials, but
-AgentProof still needs a non-empty key to be present, so give it a dummy one:
+Yes. Point `--base-url` at any OpenAI-compatible endpoint: Ollama, vLLM,
+LM Studio, or an internal gateway. Local servers ignore credentials, but
+AgentProof requires a non-empty key. Use any dummy value:
 
 ```bash
 export OPENAI_API_KEY=ollama        # any non-empty value will do
@@ -495,23 +494,21 @@ agentproof --check --provider openai \
 ```
 
 **Does it send my code to a third party?**
-Yes — the artifacts it collects are sent to whichever provider you configure.
-Control exactly what leaves your machine with `--include` / `--exclude`, or
-keep it all local with a local `--base-url`.
+Yes. It sends collected artifacts to the provider you configure. Use
+`--include` or `--exclude` to control what leaves your machine, or point
+`--base-url` at a local server.
 
-**What if the agent never wrote the files?**
-Then there is nothing to verify, and that is exactly the finding. A missing
-artifact is evidence of a missing requirement, not a technicality to route
-around.
+**What if the agent did not write the files?**
+A missing artifact is evidence of a missing requirement. The audit fails.
 
 **Is the auditor itself trustworthy?**
-No model is. That is why AgentProof shows you the *evidence* for every
-requirement, not just the verdict, and why the guard rails assume the auditor
-is over-confident. Read the table; do not just read the badge.
+Models make mistakes. AgentProof shows the evidence for every requirement, and
+the guard rails assume the auditor may be over-confident. Check the evidence
+table along with the verdict.
 
 **Does this replace tests?**
-No, and it is not trying to. Tests verify behaviour; AgentProof verifies that
-the work exists at all. The two compose well.
+No. Tests verify behaviour. AgentProof verifies that the claimed work exists.
+They cover different failure modes.
 
 ---
 
@@ -520,7 +517,7 @@ the work exists at all. The two compose well.
 ```bash
 pip install -e ".[dev]"
 
-pytest                      # 110 tests
+pytest                      # 133 tests
 ruff check .                # lint
 ruff format --check .       # formatting
 mypy                        # strict type checking
@@ -571,14 +568,13 @@ Once the first release is on PyPI, add these two badges to the header:
 
 ## Contributing
 
-Contributions are welcome — bug reports, a new provider backend, a better
-auditor prompt, or a rule you think the guard rails should enforce.
+Contributions are welcome: bug reports, provider backends, prompt
+improvements, and new guard-rail rules.
 
-1. Open an issue describing the problem before you start, so we can agree on
-   the approach.
+1. Open an issue that describes the problem, so we can agree on the approach.
 2. Fork the repository and create a branch.
-3. Keep the bar high: `ruff check .`, `ruff format --check .`, `mypy` and
-   `pytest` all have to pass.
+3. Run `ruff check .`, `ruff format --check .`, `mypy`, and `pytest` before
+   opening the pull request.
 4. Add a test for every behaviour change.
 5. Open a pull request describing what changed and why.
 
@@ -589,6 +585,6 @@ register it in `agentproof/providers/registry.py`.
 
 ## License
 
-MIT — see [LICENSE](LICENSE).
+MIT. See [LICENSE](LICENSE).
 
 Changelog: [CHANGELOG.md](CHANGELOG.md).

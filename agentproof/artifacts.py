@@ -310,11 +310,14 @@ def collect_artifacts(
                 result.skipped[rel] = "total size budget exhausted"
                 continue
 
-            content, truncated, is_binary = _read_text(path, min(opts.max_file_bytes, remaining))
+            read_limit = min(opts.max_file_bytes, remaining)
+            content, truncated, is_binary = _read_text(path, read_limit)
             if content is not None:
                 result.total_bytes += len(content.encode("utf-8", errors="replace"))
             else:
-                result.total_bytes += stat.st_size
+                # Charge only the inspected sample. Counting a binary file's full
+                # size would let a single large blob starve textual evidence.
+                result.total_bytes += min(stat.st_size, read_limit)
 
             if is_binary:
                 kind = "binary"

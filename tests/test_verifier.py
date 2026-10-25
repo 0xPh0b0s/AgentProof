@@ -103,6 +103,45 @@ def test_success_with_unsatisfied_checks_is_downgraded(workspace: Path, settings
     assert "requirement(s) remained unsatisfied" in report.notes
 
 
+def test_success_without_checks_is_downgraded(workspace: Path, settings: Settings) -> None:
+    """A SUCCESS verdict with no requirement-level checks is unproven."""
+    payload = make_report_payload(verdict="success", confidence=0.99, checks=[])
+    provider = FakeProvider([json.dumps(payload)])
+    verifier = Verifier(provider, settings)
+
+    report = verifier.verify(_context(workspace, settings))
+
+    assert report.verdict is Verdict.FAILED
+    assert "without any requirement-level checks" in report.notes
+    assert "summary alone" not in report.notes
+
+
+def test_failed_without_checks_keeps_summary_note(workspace: Path, settings: Settings) -> None:
+    """An auditor-declared FAILED with no checks is annotated, not re-downgraded."""
+    payload = make_report_payload(verdict="failed", confidence=0.99, checks=[])
+    provider = FakeProvider([json.dumps(payload)])
+    verifier = Verifier(provider, settings)
+
+    report = verifier.verify(_context(workspace, settings))
+
+    assert report.verdict is Verdict.FAILED
+    assert "rests on its summary alone" in report.notes
+    assert "without any requirement-level checks" not in report.notes
+
+
+def test_report_records_evidence_completeness(workspace: Path, settings: Settings) -> None:
+    """The report records whether the auditor saw all available evidence."""
+    settings.max_files = 1
+    provider = FakeProvider([json.dumps(make_report_payload())])
+    verifier = Verifier(provider, settings)
+
+    report = verifier.verify(_context(workspace, settings))
+
+    assert report.artifacts_scanned == 1
+    assert report.artifacts_skipped > 0
+    assert report.budget_exhausted is True
+
+
 def test_invalid_json_triggers_a_corrective_retry(workspace: Path, settings: Settings) -> None:
     """A malformed first answer is retried once with a reminder."""
     provider = FakeProvider(

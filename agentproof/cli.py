@@ -22,11 +22,9 @@ from rich.text import Text
 from agentproof import __version__
 from agentproof.config import (
     Settings,
-    apply_config_mapping,
     describe_settings,
     find_config_file,
     load_settings,
-    read_config_file,
 )
 from agentproof.context import build_context
 from agentproof.errors import (
@@ -81,29 +79,10 @@ def _load_settings(options: dict[str, Any]) -> Settings:
         The resolved settings.
     """
     config_path: Path | None = options.get("config_path")
-    if config_path is None:
-        return _settings_from_options(options)
-
-    data = read_config_file(config_path)
-    overrides = _option_overrides(options)
-    settings = Settings()
-    apply_config_mapping(settings, data, config_path.parent)
-    settings.config_path = config_path
-    for key, value in overrides.items():
-        setattr(settings, key, value)
-    return settings
-
-
-def _settings_from_options(options: dict[str, Any]) -> Settings:
-    """Resolve settings from config discovery plus command-line overrides.
-
-    Args:
-        options: The parsed command-line options.
-
-    Returns:
-        The resolved settings.
-    """
-    return load_settings(overrides=_option_overrides(options))
+    return load_settings(
+        overrides=_option_overrides(options),
+        config_path=config_path,
+    )
 
 
 def _option_overrides(options: dict[str, Any]) -> dict[str, Any]:
@@ -454,7 +433,7 @@ def doctor_command(config_path: Path | None, provider: str | None, no_color: boo
         settings = _load_settings({"config_path": config_path}) if config_path else load_settings()
         if provider:
             settings.provider = provider.lower()
-    except AgentProofError as exc:
+    except (AgentProofError, ValueError) as exc:
         console.print(f"  [red]configuration error:[/red] {exc}")
         raise SystemExit(EXIT_USAGE) from exc
 
@@ -520,10 +499,7 @@ def _execute_check(options: dict[str, Any], console: Console) -> int:
         settings = _load_settings(options)
         task, claim, workspace = _resolve_inputs(settings, options, console)
         context = build_context(settings, task=task, claim=claim, workspace=workspace)
-    except (ConfigurationError, WorkspaceError) as exc:
-        _print_error(console, exc)
-        return EXIT_USAGE
-    except AgentProofError as exc:
+    except (AgentProofError, ValueError) as exc:
         _print_error(console, exc)
         return EXIT_USAGE
 

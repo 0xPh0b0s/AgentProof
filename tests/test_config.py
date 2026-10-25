@@ -3,11 +3,13 @@
 from __future__ import annotations
 
 import json
+import os
 from pathlib import Path
 
 import pytest
 from agentproof.config import (
     CONFIG_FILENAME,
+    load_dotenv_files,
     load_settings,
     read_config_file,
     save_config_file,
@@ -183,3 +185,95 @@ def test_effective_model_falls_back_to_provider_default() -> None:
     assert Settings(provider="anthropic").effective_model == "claude-sonnet-5-5"
     assert Settings(provider="openai").effective_model == "gpt-6.1-sol"
     assert Settings(provider="openai", model="custom").effective_model == "custom"
+
+
+def test_bad_environment_numeric_value_raises_configuration_error(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A malformed environment value is a configuration error, not a traceback."""
+    monkeypatch.setenv("AGENTPROOF_MIN_CONFIDENCE", "not-a-number")
+
+    with pytest.raises(ConfigurationError, match="AGENTPROOF_MIN_CONFIDENCE"):
+        load_settings(cwd=tmp_path, use_dotenv=False)
+
+
+def test_bad_config_numeric_value_raises_configuration_error(tmp_path: Path) -> None:
+    """A malformed value in the config file is also reported cleanly."""
+    (tmp_path / CONFIG_FILENAME).write_text(
+        json.dumps({"max_files": "many"}),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ConfigurationError, match="max_files"):
+        load_settings(cwd=tmp_path, use_dotenv=False, use_env=False)
+
+
+def test_nearest_dotenv_file_wins(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """A project .env overrides one in a parent directory."""
+    parent = tmp_path / "parent"
+    child = parent / "child"
+    child.mkdir(parents=True)
+    (parent / ".env").write_text("AGENTPROOF_TASK=parent\n", encoding="utf-8")
+    (child / ".env").write_text("AGENTPROOF_TASK=child\n", encoding="utf-8")
+    monkeypatch.delenv("AGENTPROOF_TASK", raising=False)
+
+    load_dotenv_files(child)
+
+    assert os.environ["AGENTPROOF_TASK"] == "child"
+
+
+def test_dotenv_local_wins_over_dotenv(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """The more specific .env.local overrides .env in the same directory."""
+    (tmp_path / ".env").write_text("AGENTPROOF_TASK=base\n", encoding="utf-8")
+    (tmp_path / ".env.local").write_text("AGENTPROOF_TASK=local\n", encoding="utf-8")
+    monkeypatch.delenv("AGENTPROOF_TASK", raising=False)
+
+    load_dotenv_files(tmp_path)
+
+    assert os.environ["AGENTPROOF_TASK"] == "local"
+
+
+def test_explicit_config_replaces_project_discovery(tmp_path: Path) -> None:
+    """An explicit config file is used instead of the nearest .agentproof.json."""
+    (tmp_path / CONFIG_FILENAME).write_text(
+        json.dumps({"task": "discovered", "claim": "from discovery"}),
+        encoding="utf-8",
+    )
+    explicit = tmp_path / "custom.json"
+    explicit.write_text(
+        json.dumps({"task": "explicit", "claim": "from the explicit file"}),
+        encoding="utf-8",
+    )
+
+    settings = load_settings(
+        cwd=tmp_path,
+        config_path=explicit,
+        use_dotenv=False,
+        use_env=False,
+    )
+
+    assert settings.task == "explicit"
+    assert settings.claim == "from the explicit file"
+    assert settings.config_path == explicit
+
+
+def test_explicit_config_is_validated(tmp_path: Path) -> None:
+    """An explicit config file goes through the same validation as discovery."""
+    explicit = tmp_path / "custom.json"
+    explicit.write_text(json.dumps({"min_confidence": 1.5}), encoding="utf-8")
+
+    with pytest.raises(ConfigurationError, match="min_confidence"):
+        load_settings(
+            cwd=tmp_path,
+            config_path=explicit,
+            use_dotenv=False,
+            use_env=False,
+        )
+
+
+def test_unreadable_dotenv_is_a_configuration_error(tmp_path: Path) -> None:
+    """A .env file that cannot be parsed is reported as a configuration error."""
+    (tmp_path / ".env").write_bytes(b"AGENTPROOF_TASK=bad\x00value\n")
+
+    with pytest.raises(ConfigurationError, match=r"\.env"):
+        load_dotenv_files(tmp_path)

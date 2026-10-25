@@ -181,6 +181,36 @@ def _bullet_panel(title: str, items: list[str], style: str) -> Panel | None:
     return Panel(body, title=title, border_style=style, padding=(0, 2))
 
 
+def _completeness_panel(report: VerificationReport) -> Panel | None:
+    """Warn when the audit did not see all available evidence.
+
+    Args:
+        report: The report to inspect.
+
+    Returns:
+        A warning panel, or ``None`` when coverage was complete.
+    """
+    problems: list[str] = []
+    if report.budget_exhausted:
+        problems.append("a collection limit stopped the scan early")
+    if report.artifacts_truncated:
+        problems.append(f"{report.artifacts_truncated} artifact(s) were truncated")
+    if report.artifacts_skipped:
+        problems.append(f"{report.artifacts_skipped} file(s) were omitted")
+
+    if not problems:
+        return None
+
+    body = Text()
+    body.append("This audit did not see all available evidence: " + "; ".join(problems) + ".")
+    body.append(
+        " Requirements whose evidence may be in the omitted content should be "
+        'treated as "unverifiable", not "missing".',
+        style="dim",
+    )
+    return Panel(body, title="Evidence completeness", border_style="yellow", padding=(0, 2))
+
+
 def _footer(report: VerificationReport) -> Text:
     """Build the metadata footer.
 
@@ -198,6 +228,11 @@ def _footer(report: VerificationReport) -> Text:
     footer.append(f"model: {report.model or 'unknown'}", style="dim")
     footer.append(" · ", style="dim")
     footer.append(f"artifacts scanned: {report.artifacts_scanned}", style="dim")
+    if report.artifacts_truncated or report.artifacts_skipped:
+        footer.append(
+            f" ({report.artifacts_truncated} truncated, {report.artifacts_skipped} skipped)",
+            style="dim",
+        )
     footer.append(" · ", style="dim")
     footer.append(f"usage: {usage}", style="dim")
     footer.append(" · ", style="dim")
@@ -235,6 +270,11 @@ def render_report(
         out.print(context)
         out.print()
     out.print(_verdict_panel(report))
+
+    completeness = _completeness_panel(report)
+    if completeness is not None:
+        out.print()
+        out.print(completeness)
 
     if report.checks:
         out.print()

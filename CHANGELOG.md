@@ -24,11 +24,31 @@ and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.
   line options.
 - Artifact collection with `.gitignore` support, binary detection, and
   per-file, per-total, and per-count budgets.
-- Two guard rails that downgrade a `SUCCESS` verdict that falls below the
-  confidence threshold or contains an unverified requirement.
+- Evidence-completeness reporting: the auditor is told when files were omitted
+  or content was truncated, and the terminal and JSON reports record it so a
+  `FAILED` verdict cannot quietly hide a collection limit.
+- Three guard rails that downgrade a `SUCCESS` verdict that falls below the
+  confidence threshold, supplies no requirement-level checks, or contains an
+  unverified requirement.
 - JSON output mode and stable exit codes (`0` verified, `1` not verified,
   `2` configuration, `3` provider, `4` unparseable response) for CI use.
 - A typed public API (`agentproof.Settings`, `agentproof.build_context`,
   `agentproof.Verifier`) for use as a library.
+
+### Fixed
+
+- Binary files are charged only for the inspected sample against the collection
+  budget, so one large blob cannot crowd out textual evidence.
+- Artifact framing uses a random per-run nonce, so agent-authored marker text
+  cannot forge or close a file frame.
+- Malformed numeric configuration values, including environment variables, are
+  reported as configuration errors instead of tracebacks.
+- An explicit `--config` file is now validated like a discovered configuration,
+  and unreadable or malformed `.env` files produce a configuration error and
+  exit code `2` instead of a traceback.
+- The nearest `.env` file now wins over one in a parent directory, and
+  `.env.local` wins over `.env` in the same directory.
+- A `.env` file written by `agentproof init` is created with owner-only
+  permissions (`0600`).
 
 [1.0.0]: https://codeberg.org/0xPh0b0s/AgentProof/releases/tag/v1.0.0

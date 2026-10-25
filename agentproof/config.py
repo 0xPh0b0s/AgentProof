@@ -41,8 +41,8 @@ __all__ = [
 #: Name of the project-level configuration file.
 CONFIG_FILENAME = ".agentproof.json"
 
-#: Names of files that may hold API credentials.
-DOTENV_FILENAMES: tuple[str, ...] = (".env", ".env.local")
+#: Names of files that may hold API credentials. More specific files first.
+DOTENV_FILENAMES: tuple[str, ...] = (".env.local", ".env")
 
 #: Environment variables that override configuration file values.
 ENV_OVERRIDES: dict[str, str] = {
@@ -185,7 +185,9 @@ def find_config_file(start: Path | None = None) -> Path | None:
 def load_dotenv_files(start: Path | None = None) -> list[Path]:
     """Load ``.env`` files into the process environment.
 
-    Values already present in the environment are preserved.
+    Values already present in the environment are preserved. Files are loaded
+    from the nearest directory outward, so a project ``.env`` wins over one in
+    a parent directory, and ``.env.local`` wins over ``.env``.
 
     Args:
         start: Directory to start searching from.
@@ -201,11 +203,14 @@ def load_dotenv_files(start: Path | None = None) -> list[Path]:
 
     loaded: list[Path] = []
     directories = [current, *current.parents]
-    for directory in reversed(directories):
+    for directory in directories:
         for name in DOTENV_FILENAMES:
             candidate = directory / name
             if candidate.is_file():
-                load_dotenv(candidate, override=False)
+                try:
+                    load_dotenv(candidate, override=False)
+                except (OSError, ValueError) as exc:
+                    raise ConfigurationError(f"Cannot read .env file {candidate}: {exc}") from exc
                 loaded.append(candidate)
     return loaded
 
@@ -225,7 +230,7 @@ def read_config_file(path: Path) -> dict[str, Any]:
     """
     try:
         raw = path.read_text(encoding="utf-8")
-    except OSError as exc:
+    except (OSError, ValueError) as exc:
         raise ConfigurationError(f"Cannot read configuration file {path}: {exc}") from exc
 
     try:
@@ -274,6 +279,22 @@ def _as_str_list(value: Any, *, key: str) -> list[str]:
     raise ConfigurationError(f"Configuration key '{key}' must be a string or a list of strings.")
 
 
+def _coerce_float(value: Any, *, source: str) -> float:
+    """Coerce a value to a float, reporting the offending setting."""
+    try:
+        return float(value)
+    except (TypeError, ValueError) as exc:
+        raise ConfigurationError(f"{source} must be a number (got {value!r}).") from exc
+
+
+def _coerce_int(value: Any, *, source: str) -> int:
+    """Coerce a value to an integer, reporting the offending setting."""
+    try:
+        return int(value)
+    except (TypeError, ValueError) as exc:
+        raise ConfigurationError(f"{source} must be an integer (got {value!r}).") from exc
+
+
 def _read_text_file(path: Path, *, label: str) -> str:
     """Read a text file referenced from configuration.
 
@@ -289,7 +310,7 @@ def _read_text_file(path: Path, *, label: str) -> str:
     """
     try:
         return path.read_text(encoding="utf-8", errors="replace").strip()
-    except OSError as exc:
+    except (OSError, ValueError) as exc:
         raise ConfigurationError(f"Cannot read {label} file {path}: {exc}") from exc
 
 
@@ -326,21 +347,23 @@ def apply_config_mapping(settings: Settings, data: dict[str, Any], base_dir: Pat
     if data.get("auditor_instructions"):
         settings.auditor_instructions = str(data["auditor_instructions"])
     if "min_confidence" in data and data["min_confidence"] is not None:
-        settings.min_confidence = float(data["min_confidence"])
+        settings.min_confidence = _coerce_float(data["min_confidence"], source="min_confidence")
     if "max_artifact_bytes" in data and data["max_artifact_bytes"] is not None:
-        settings.max_artifact_bytes = int(data["max_artifact_bytes"])
+        settings.max_artifact_bytes = _coerce_int(
+            data["max_artifact_bytes"], source="max_artifact_bytes"
+        )
     if "max_total_bytes" in data and data["max_total_bytes"] is not None:
-        settings.max_total_bytes = int(data["max_total_bytes"])
+        settings.max_total_bytes = _coerce_int(data["max_total_bytes"], source="max_total_bytes")
     if "max_files" in data and data["max_files"] is not None:
-        settings.max_files = int(data["max_files"])
+        settings.max_files = _coerce_int(data["max_files"], source="max_files")
     if "temperature" in data and data["temperature"] is not None:
-        settings.temperature = float(data["temperature"])
+        settings.temperature = _coerce_float(data["temperature"], source="temperature")
     if "timeout" in data and data["timeout"] is not None:
-        settings.timeout = float(data["timeout"])
+        settings.timeout = _coerce_float(data["timeout"], source="timeout")
     if "max_retries" in data and data["max_retries"] is not None:
-        settings.max_retries = int(data["max_retries"])
+        settings.max_retries = _coerce_int(data["max_retries"], source="max_retries")
     if "max_tokens" in data and data["max_tokens"] is not None:
-        settings.max_tokens = int(data["max_tokens"])
+        settings.max_tokens = _coerce_int(data["max_tokens"], source="max_tokens")
 
     task_file = data.get("task_file")
     if task_file:
@@ -364,9 +387,9 @@ def _apply_env(settings: Settings) -> None:
         if not value:
             continue
         if key == "min_confidence":
-            settings.min_confidence = float(value)
+            settings.min_confidence = _coerce_float(value, source=env_name)
         elif key in {"max_files", "max_artifact_bytes", "max_total_bytes"}:
-            setattr(settings, key, int(value))
+            setattr(settings, key, _coerce_int(value, source=env_name))
         elif key == "workspace":
             settings.workspace = Path(value).expanduser()
         elif key == "provider":
@@ -380,6 +403,7 @@ def load_settings(
     *,
     cwd: Path | None = None,
     overrides: dict[str, Any] | None = None,
+    config_path: Path | None = None,
     use_dotenv: bool = True,
     use_env: bool = True,
 ) -> Settings:
@@ -389,6 +413,8 @@ def load_settings(
         cwd: Directory used as the starting point for config discovery.
         overrides: Explicitly provided command-line values. Keys with a
             ``None`` value are ignored, so they do not clobber lower layers.
+        config_path: Explicit configuration file to use instead of searching
+            for a project ``.agentproof.json``.
         use_dotenv: Whether ``.env`` files should be loaded.
         use_env: Whether environment variables should be applied.
 
@@ -409,10 +435,17 @@ def load_settings(
     if user_path.is_file():
         apply_config_mapping(settings, read_config_file(user_path), user_path.parent)
 
-    project_path = find_config_file(start)
-    if project_path is not None:
-        apply_config_mapping(settings, read_config_file(project_path), project_path.parent)
-        settings.config_path = project_path
+    if config_path is not None:
+        explicit_path = config_path.expanduser()
+        if not explicit_path.is_absolute():
+            explicit_path = (start / explicit_path).resolve()
+        apply_config_mapping(settings, read_config_file(explicit_path), explicit_path.parent)
+        settings.config_path = explicit_path
+    else:
+        project_path = find_config_file(start)
+        if project_path is not None:
+            apply_config_mapping(settings, read_config_file(project_path), project_path.parent)
+            settings.config_path = project_path
 
     if use_env:
         _apply_env(settings)
