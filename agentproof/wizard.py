@@ -199,6 +199,8 @@ def run_wizard(
 def _write_env_file(path: Path, key: str, value: str) -> None:
     """Append or replace a key in a ``.env`` file.
 
+    The file is created with owner-only permissions, since it holds a secret.
+
     Args:
         path: The ``.env`` file.
         key: The variable name.
@@ -208,3 +210,4 @@ def _write_env_file(path: Path, key: str, value: str) -> None:
     lines = [line for line in existing.splitlines() if not line.strip().startswith(f"{key}=")]
     lines.append(f"{key}={value}")
     path.write_text("\n".join(lines).strip() + "\n", encoding="utf-8")
+    path.chmod(0o600)

@@ -207,7 +207,10 @@ def load_dotenv_files(start: Path | None = None) -> list[Path]:
         for name in DOTENV_FILENAMES:
             candidate = directory / name
             if candidate.is_file():
-                load_dotenv(candidate, override=False)
+                try:
+                    load_dotenv(candidate, override=False)
+                except (OSError, ValueError) as exc:
+                    raise ConfigurationError(f"Cannot read .env file {candidate}: {exc}") from exc
                 loaded.append(candidate)
     return loaded
 
@@ -227,7 +230,7 @@ def read_config_file(path: Path) -> dict[str, Any]:
     """
     try:
         raw = path.read_text(encoding="utf-8")
-    except OSError as exc:
+    except (OSError, ValueError) as exc:
         raise ConfigurationError(f"Cannot read configuration file {path}: {exc}") from exc
 
     try:
@@ -307,7 +310,7 @@ def _read_text_file(path: Path, *, label: str) -> str:
     """
     try:
         return path.read_text(encoding="utf-8", errors="replace").strip()
-    except OSError as exc:
+    except (OSError, ValueError) as exc:
         raise ConfigurationError(f"Cannot read {label} file {path}: {exc}") from exc
 
 
@@ -400,6 +403,7 @@ def load_settings(
     *,
     cwd: Path | None = None,
     overrides: dict[str, Any] | None = None,
+    config_path: Path | None = None,
     use_dotenv: bool = True,
     use_env: bool = True,
 ) -> Settings:
@@ -409,6 +413,8 @@ def load_settings(
         cwd: Directory used as the starting point for config discovery.
         overrides: Explicitly provided command-line values. Keys with a
             ``None`` value are ignored, so they do not clobber lower layers.
+        config_path: Explicit configuration file to use instead of searching
+            for a project ``.agentproof.json``.
         use_dotenv: Whether ``.env`` files should be loaded.
         use_env: Whether environment variables should be applied.
 
@@ -429,10 +435,17 @@ def load_settings(
     if user_path.is_file():
         apply_config_mapping(settings, read_config_file(user_path), user_path.parent)
 
-    project_path = find_config_file(start)
-    if project_path is not None:
-        apply_config_mapping(settings, read_config_file(project_path), project_path.parent)
-        settings.config_path = project_path
+    if config_path is not None:
+        explicit_path = config_path.expanduser()
+        if not explicit_path.is_absolute():
+            explicit_path = (start / explicit_path).resolve()
+        apply_config_mapping(settings, read_config_file(explicit_path), explicit_path.parent)
+        settings.config_path = explicit_path
+    else:
+        project_path = find_config_file(start)
+        if project_path is not None:
+            apply_config_mapping(settings, read_config_file(project_path), project_path.parent)
+            settings.config_path = project_path
 
     if use_env:
         _apply_env(settings)

@@ -43,7 +43,12 @@ and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.
   cannot forge or close a file frame.
 - Malformed numeric configuration values, including environment variables, are
   reported as configuration errors instead of tracebacks.
+- An explicit `--config` file is now validated like a discovered configuration,
+  and unreadable or malformed `.env` files produce a configuration error and
+  exit code `2` instead of a traceback.
 - The nearest `.env` file now wins over one in a parent directory, and
   `.env.local` wins over `.env` in the same directory.
+- A `.env` file written by `agentproof init` is created with owner-only
+  permissions (`0600`).
 
 [1.0.0]: https://codeberg.org/0xPh0b0s/AgentProof/releases/tag/v1.0.0

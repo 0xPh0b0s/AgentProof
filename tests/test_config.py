@@ -231,3 +231,49 @@ def test_dotenv_local_wins_over_dotenv(tmp_path: Path, monkeypatch: pytest.Monke
     load_dotenv_files(tmp_path)
 
     assert os.environ["AGENTPROOF_TASK"] == "local"
+
+
+def test_explicit_config_replaces_project_discovery(tmp_path: Path) -> None:
+    """An explicit config file is used instead of the nearest .agentproof.json."""
+    (tmp_path / CONFIG_FILENAME).write_text(
+        json.dumps({"task": "discovered", "claim": "from discovery"}),
+        encoding="utf-8",
+    )
+    explicit = tmp_path / "custom.json"
+    explicit.write_text(
+        json.dumps({"task": "explicit", "claim": "from the explicit file"}),
+        encoding="utf-8",
+    )
+
+    settings = load_settings(
+        cwd=tmp_path,
+        config_path=explicit,
+        use_dotenv=False,
+        use_env=False,
+    )
+
+    assert settings.task == "explicit"
+    assert settings.claim == "from the explicit file"
+    assert settings.config_path == explicit
+
+
+def test_explicit_config_is_validated(tmp_path: Path) -> None:
+    """An explicit config file goes through the same validation as discovery."""
+    explicit = tmp_path / "custom.json"
+    explicit.write_text(json.dumps({"min_confidence": 1.5}), encoding="utf-8")
+
+    with pytest.raises(ConfigurationError, match="min_confidence"):
+        load_settings(
+            cwd=tmp_path,
+            config_path=explicit,
+            use_dotenv=False,
+            use_env=False,
+        )
+
+
+def test_unreadable_dotenv_is_a_configuration_error(tmp_path: Path) -> None:
+    """A .env file that cannot be parsed is reported as a configuration error."""
+    (tmp_path / ".env").write_bytes(b"AGENTPROOF_TASK=bad\x00value\n")
+
+    with pytest.raises(ConfigurationError, match=r"\.env"):
+        load_dotenv_files(tmp_path)
