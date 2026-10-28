@@ -9,7 +9,12 @@ The package exposes a small, stable public API:
 
 from __future__ import annotations
 
-__version__ = "1.0.0"
+from importlib.metadata import PackageNotFoundError, version
+
+try:
+    __version__ = version("agentproof-cli")
+except PackageNotFoundError:  # pragma: no cover - source tree without an install
+    __version__ = "0.0.0"
 
 from agentproof.config import Settings
 from agentproof.context import VerificationContext, build_context

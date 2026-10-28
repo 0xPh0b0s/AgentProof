@@ -406,10 +406,13 @@ def test_init_writes_a_private_dotenv(
 
 
 def test_version_option(runner: CliRunner) -> None:
-    """The version option prints the package version."""
+    """The version option prints the version from the installed metadata."""
+    from importlib.metadata import version
+
     result = runner.invoke(main, ["--version"])
     assert result.exit_code == EXIT_SUCCESS
     assert "agentproof" in result.output
+    assert version("agentproof-cli") in result.output
 
 
 def test_help_lists_the_check_flag(runner: CliRunner) -> None:
