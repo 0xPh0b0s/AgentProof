@@ -7,7 +7,7 @@ from typing import Any
 
 import httpx
 import pytest
-from agentproof.errors import MissingCredentialsError, ProviderError
+from agentproof.errors import MissingCredentialsError, ProviderError, RateLimitError
 from agentproof.providers.anthropic import AnthropicProvider
 from agentproof.providers.openai import OpenAIProvider
 from agentproof.providers.registry import create_provider, get_spec, provider_names
@@ -192,3 +192,138 @@ def test_retryable_errors_are_retried() -> None:
     provider.complete(system="s", user="u")
 
     assert attempts["count"] == 2
+
+
+def test_timeouts_are_reported_as_provider_errors() -> None:
+    """A request timeout surfaces as a ProviderError, not a raw httpx error."""
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        raise httpx.ReadTimeout("too slow", request=request)
+
+    provider = AnthropicProvider(
+        api_key="k",
+        max_retries=0,
+        transport=httpx.MockTransport(handler),
+    )
+
+    with pytest.raises(ProviderError, match="timed out"):
+        provider.complete(system="s", user="u")
+
+
+def test_network_errors_are_reported_as_provider_errors() -> None:
+    """A connection failure surfaces as a ProviderError."""
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        raise httpx.ConnectError("connection refused", request=request)
+
+    provider = AnthropicProvider(
+        api_key="k",
+        max_retries=0,
+        transport=httpx.MockTransport(handler),
+    )
+
+    with pytest.raises(ProviderError, match="network error"):
+        provider.complete(system="s", user="u")
+
+
+def test_non_json_success_response_is_rejected() -> None:
+    """A 200 response that is not JSON is a ProviderError."""
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, text="<html>not json</html>")
+
+    provider = AnthropicProvider(
+        api_key="k",
+        max_retries=0,
+        transport=httpx.MockTransport(handler),
+    )
+
+    with pytest.raises(ProviderError, match="non-JSON response"):
+        provider.complete(system="s", user="u")
+
+
+def test_non_json_error_body_is_included_in_the_message() -> None:
+    """A failed response with a non-JSON body still reports the body."""
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(500, text="gateway down")
+
+    provider = AnthropicProvider(
+        api_key="k",
+        max_retries=0,
+        transport=httpx.MockTransport(handler),
+    )
+
+    with pytest.raises(ProviderError, match="gateway down"):
+        provider.complete(system="s", user="u")
+
+
+def test_rate_limit_is_raised_after_retries() -> None:
+    """An exhausted rate limit raises RateLimitError with the status code."""
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(429, json={"error": {"message": "slow down"}})
+
+    provider = AnthropicProvider(
+        api_key="k",
+        max_retries=0,
+        transport=httpx.MockTransport(handler),
+    )
+
+    with pytest.raises(RateLimitError) as excinfo:
+        provider.complete(system="s", user="u")
+    assert excinfo.value.status_code == 429
+    assert "slow down" in str(excinfo.value)
+
+
+def test_retryable_error_is_raised_when_retries_run_out() -> None:
+    """A persistent 5xx reports how many attempts were made."""
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(503, json={"error": {"message": "unavailable"}})
+
+    provider = AnthropicProvider(
+        api_key="k",
+        max_retries=0,
+        transport=httpx.MockTransport(handler),
+    )
+
+    with pytest.raises(ProviderError, match="after 1 attempts"):
+        provider.complete(system="s", user="u")
+
+
+def test_openai_falls_back_when_structured_output_is_rejected() -> None:
+    """A 400 mentioning response_format retries with plain JSON mode."""
+    calls: list[dict[str, Any]] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        body = json.loads(request.content)
+        calls.append(body)
+        if body.get("response_format", {}).get("type") == "json_schema":
+            return httpx.Response(
+                400,
+                json={"error": {"message": "response_format json_schema is not supported"}},
+            )
+        return httpx.Response(200, json=OPENAI_BODY)
+
+    provider = OpenAIProvider(api_key="k", transport=httpx.MockTransport(handler))
+    response = provider.complete(system="s", user="u", json_schema={"type": "object"})
+
+    assert len(calls) == 2
+    assert calls[1]["response_format"] == {"type": "json_object"}
+    assert response.text == '{"verdict": "failed"}'
+
+
+@pytest.mark.parametrize("provider_cls", [AnthropicProvider, OpenAIProvider])
+def test_malformed_response_payload_is_tolerated(provider_cls: type[Any]) -> None:
+    """A response without the expected fields yields empty text and usage."""
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, json={})
+
+    provider = provider_cls(api_key="k", transport=httpx.MockTransport(handler))
+    response = provider.complete(system="s", user="u")
+
+    assert response.text == ""
+    assert response.usage.prompt_tokens == 0
+    assert response.usage.completion_tokens == 0
