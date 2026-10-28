@@ -36,9 +36,9 @@ An agent finishes a task and reports success:
 > *"I implemented the feature, added the migration, and ran the suite. All 42
 > tests pass."*
 
-You can trust that report, ask the same agent to check its work, or read every
-file yourself. The first two repeat the agent's account. The third makes you
-the QA department for every run.
+You can trust that report, ask the same agent to check its work, or read the
+files yourself. Reading them yourself gives you evidence the agent did not
+write, but it makes you the QA department for each run.
 
 AgentProof sends the task, the agent's claim, and the contents of the workspace
 to a different model. The auditor must name the artifact that supports or
@@ -55,9 +55,9 @@ pip install agentproof-cli
 agentproof --demo
 ```
 
-The demo runs artifact collection, prompt assembly, verdict parsing, guard
-rails, and terminal rendering against a synthetic workspace and a pre-recorded
-auditor answer. It reads nothing on your machine and needs no credentials:
+The demo runs the full pipeline against a synthetic workspace and a
+pre-recorded auditor answer. It reads nothing on your machine and needs no
+credentials:
 
 ```console
 ╭───────────────────────────────── Demo mode ──────────────────────────────────╮
@@ -128,7 +128,7 @@ auditor: demo · model: agentproof-demo-auditor · artifacts scanned: 5 · usage
 
 The demo auditor reported `SUCCESS` with 91% confidence. AgentProof returned
 `FAILED` because two requirements had no evidence. The guard rails downgrade a
-confident verdict when evidence is missing.
+`SUCCESS` verdict when the evidence does not support it.
 
 ---
 
@@ -136,14 +136,14 @@ confident verdict when evidence is missing.
 
 | | |
 | --- | --- |
-| 🧑‍⚖️ **An independent auditor** | A different model treats the claim as a hypothesis and looks for evidence in the workspace. |
-| 📄 **Requirement-level evidence** | Every requirement the auditor extracted, its status, and the artifact that proves or disproves it. |
-| 🧾 **Evidence completeness** | The collector records omitted files, truncated content, and exhausted budgets. The auditor and the report show those limits, so a collection gap cannot pass for absent work. |
-| 🚦 **A binary verdict** | `SUCCESS` or `FAILED`, with no subjective score. |
-| ⚖️ **Three guard rails** | A `SUCCESS` below your confidence threshold, without requirement-level checks, or with an unverified requirement becomes `FAILED`. |
-| 🛡️ **Prompt-injection hardening** | Artifact content is labelled untrusted and framed with a random per-run nonce, so agent-authored text cannot instruct the auditor or forge a file boundary. |
-| 🤝 **CI-native** | Exit codes `0` to `4` and a `--json` mode let an unproven claim block a merge. |
-| 🧪 **Provider choice** | Anthropic and OpenAI out of the box, plus any OpenAI-compatible endpoint through `--base-url`. |
+| **An independent auditor** | A different model treats the claim as a hypothesis and looks for evidence in the workspace. |
+| **Requirement-level evidence** | Every requirement the auditor extracted, its status, and the artifact that proves or disproves it. |
+| **Evidence completeness** | The collector records omitted files, truncated content, and exhausted budgets. The auditor and the report show those limits, so a collection limit does not look like missing work. |
+| **A binary verdict** | `SUCCESS` or `FAILED`, with no subjective score. |
+| **Three guard rails** | A `SUCCESS` below your confidence threshold, without requirement-level checks, or with an unverified requirement becomes `FAILED`. |
+| **Prompt-injection hardening** | Artifact content is labelled untrusted and framed with a random per-run nonce, so agent-authored text cannot instruct the auditor or forge a file boundary. |
+| **CI-native** | Exit codes `0` to `4` and a `--json` mode let an unproven claim block a merge. |
+| **Provider choice** | Anthropic and OpenAI out of the box, plus any OpenAI-compatible endpoint through `--base-url`. |
 
 ---
 
@@ -159,7 +159,7 @@ The PyPI distribution is named **`agentproof-cli`**. It installs the
 Requires **Python 3.10+**. Four runtime dependencies: `click`, `rich`, `httpx`,
 `python-dotenv`. Provide an API key for Anthropic or OpenAI.
 
-From a checkout (use this until the first PyPI release):
+From a checkout:
 
 ```bash
 git clone https://codeberg.org/0xPh0b0s/AgentProof.git
@@ -191,7 +191,7 @@ the auditor. It writes `.agentproof.json`:
 }
 ```
 
-Prefer the command line? Everything is overridable:
+Every field is also a command-line option:
 
 ```bash
 agentproof --check \
@@ -245,7 +245,7 @@ agentproof --check
 1. **Context gathering.** The task, the claim, and the workspace are resolved
    from, in order of precedence: command-line options, environment variables,
    `.agentproof.json`, `~/.config/agentproof/config.json`, built-in defaults.
-   Anything still missing is asked for interactively.
+   If anything is still missing, the CLI asks for it.
 
 2. **Artifact collection.** The collector walks the workspace and reads each
    relevant file. It follows `.gitignore`, skips virtualenvs and caches, marks
@@ -271,12 +271,10 @@ agentproof --check
    - a `SUCCESS` with no requirement-level checks becomes `FAILED`;
    - a `SUCCESS` containing any non-`verified` requirement becomes `FAILED`.
 
-   A claim needs complete, cited evidence to pass.
-
-6. **Reporting.** A coloured terminal report with a status badge, confidence
-   bar, requirement-by-requirement evidence table, and discrepancy lists. Use
-   `--json` for CI. When the collector omitted or truncated evidence, the
-   report records that limit instead of letting a `FAILED` verdict hide it.
+6. **Reporting.** The CLI prints a coloured terminal report with a status badge,
+   confidence bar, requirement-by-requirement evidence table, and discrepancy
+   lists. Use `--json` for CI. When the collector omitted or truncated evidence,
+   the report records that limit so a `FAILED` verdict does not hide it.
 
 ---
 
@@ -308,10 +306,9 @@ outcome.
   left out.
 - **Agent harness integration.** Score a run, feed the verdict back into the
   loop, and let the agent retry with the missing-item list in hand.
-- **Audit trail.** A machine-readable record of what was delivered when it was
-  delivered.
+- **Audit trail.** A machine-readable record of what was delivered and when.
 - **Regression testing for agent prompts.** Measure whether a prompt change
-  produced more accurate work or more persuasive prose.
+  improved the work or only the wording of the report.
 
 ---
 
@@ -363,12 +360,12 @@ outcome.
 ### Configuration files
 
 AgentProof looks for `.agentproof.json` in the current directory and every
-parent directory, and for `~/.config/agentproof/config.json`. A `.env` file is
-loaded from the current directory and every parent directory.
+parent directory, and for `~/.config/agentproof/config.json`. It loads a `.env`
+file from the current directory and every parent directory.
 
 A complete sample lives in
 [`examples/agentproof.example.json`](examples/agentproof.example.json). Copy it
-to `.agentproof.json` and edit it, or run `agentproof init` to be walked through
+to `.agentproof.json` and edit it, or run `agentproof init`, which prompts for
 the same fields.
 
 | Key | Type | Default | Description |
@@ -507,8 +504,7 @@ the guard rails assume the auditor may be over-confident. Check the evidence
 table along with the verdict.
 
 **Does this replace tests?**
-No. Tests verify behaviour. AgentProof verifies that the claimed work exists.
-They cover different failure modes.
+No. Tests verify behaviour; AgentProof verifies that the claimed work exists.
 
 ---
 
@@ -517,7 +513,7 @@ They cover different failure modes.
 ```bash
 pip install -e ".[dev]"
 
-pytest                      # 133 tests
+pytest                      # 146 tests
 ruff check .                # lint
 ruff format --check .       # formatting
 mypy                        # strict type checking
@@ -546,10 +542,9 @@ agentproof/
 
 Lint, type-checking and the test suite run on
 [Codeberg Actions](https://codeberg.org/0xPh0b0s/AgentProof/actions) via
-`.forgejo/workflows/ci.yml`. Actions must be enabled once in the repository
-settings (**Settings → Repository → Advanced → Enable Actions**).
+`.forgejo/workflows/ci.yml`.
 
-Publishing is handled by `.forgejo/workflows/release.yml`; it needs a
+`.forgejo/workflows/release.yml` publishes the package; it needs a
 `PYPI_API_TOKEN` repository secret. To publish by hand:
 
 ```bash
@@ -557,19 +552,12 @@ python -m build
 python -m twine upload dist/*
 ```
 
-Once the first release is on PyPI, add these two badges to the header:
-
-```html
-<a href="https://pypi.org/project/agentproof-cli/"><img src="https://img.shields.io/pypi/v/agentproof-cli.svg" alt="Latest PyPI release"></a>
-<a href="https://codeberg.org/0xPh0b0s/AgentProof/actions/workflows/ci.yml"><img src="https://codeberg.org/0xPh0b0s/AgentProof/badges/workflows/ci.yml/badge.svg" alt="CI status"></a>
-```
-
 ---
 
 ## Contributing
 
-Contributions are welcome: bug reports, provider backends, prompt
-improvements, and new guard-rail rules.
+Send bug reports, provider backends, prompt improvements, and new guard-rail
+rules.
 
 1. Open an issue that describes the problem, so we can agree on the approach.
 2. Fork the repository and create a branch.
@@ -578,8 +566,8 @@ improvements, and new guard-rail rules.
 4. Add a test for every behaviour change.
 5. Open a pull request describing what changed and why.
 
-New providers are welcome: implement `agentproof.providers.base.Provider` and
-register it in `agentproof/providers/registry.py`.
+To add a provider, implement `agentproof.providers.base.Provider` and register
+it in `agentproof/providers/registry.py`.
 
 ---
 
