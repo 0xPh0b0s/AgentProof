@@ -129,7 +129,14 @@ class IgnoreRule:
         prefix = f"{base}/" if base else ""
         body = compile_glob(stripped).pattern[1:-1]
 
-        regex = re.compile(rf"^{prefix}{body}$") if anchored else re.compile(rf"^(?:.*/)?{body}$")
+        if anchored:
+            regex = re.compile(rf"^{prefix}{body}$")
+        elif prefix:
+            # An unanchored rule in a nested .gitignore matches at any depth
+            # below that directory, but not above it.
+            regex = re.compile(rf"^{prefix}(?:.*/)?{body}$")
+        else:
+            regex = re.compile(rf"^(?:.*/)?{body}$")
 
         return cls(
             pattern=raw,

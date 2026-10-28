@@ -146,3 +146,68 @@ def test_large_binary_does_not_starve_textual_evidence(tmp_path: Path) -> None:
 
     assert [artifact.path for artifact in result.files] == ["a.bin", "z_evidence.py"]
     assert result.budget_exhausted is False
+
+
+def test_binaries_do_not_spend_the_text_budget(tmp_path: Path) -> None:
+    """A binary encountered first cannot exhaust the budget for later text."""
+    workspace = tmp_path / "ws"
+    workspace.mkdir()
+    (workspace / "a.bin").write_bytes(b"\x00" * 10_000)
+    (workspace / "z.txt").write_text("evidence", encoding="utf-8")
+
+    result = collect_artifacts(
+        workspace,
+        options=CollectorOptions(max_total_bytes=100, use_gitignore=False),
+    )
+
+    assert "z.txt" in {artifact.path for artifact in result.files}
+    assert result.budget_exhausted is False
+
+
+def test_prunes_ignored_directories(tmp_path: Path) -> None:
+    """Ignored directories are not walked, so their files are never listed."""
+    workspace = tmp_path / "ws"
+    workspace.mkdir()
+    (workspace / ".gitignore").write_text("build/\n", encoding="utf-8")
+    (workspace / "build").mkdir()
+    (workspace / "build" / "out.js").write_text("bundle", encoding="utf-8")
+    (workspace / "app.js").write_text("app", encoding="utf-8")
+
+    result = collect_artifacts(workspace)
+
+    assert {artifact.path for artifact in result.files} == {".gitignore", "app.js"}
+    assert not any(path.startswith("build/") for path in result.skipped)
+
+
+def test_nested_gitignore_rules_are_scoped_to_their_directory(tmp_path: Path) -> None:
+    """A nested .gitignore applies below its directory, and nowhere else."""
+    workspace = tmp_path / "ws"
+    (workspace / "a" / "deep").mkdir(parents=True)
+    (workspace / "b").mkdir()
+    (workspace / "a" / ".gitignore").write_text("*.tmp\n", encoding="utf-8")
+    (workspace / "a" / "drop.tmp").write_text("x", encoding="utf-8")
+    (workspace / "a" / "deep" / "drop.tmp").write_text("x", encoding="utf-8")
+    (workspace / "a" / "keep.txt").write_text("x", encoding="utf-8")
+    (workspace / "b" / "drop.tmp").write_text("x", encoding="utf-8")
+
+    result = collect_artifacts(workspace)
+
+    paths = {artifact.path for artifact in result.files}
+    assert "a/drop.tmp" not in paths
+    assert "a/deep/drop.tmp" not in paths
+    assert "a/keep.txt" in paths
+    assert "b/drop.tmp" in paths
+
+
+def test_reads_only_up_to_the_limit(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """The collector never reads a whole file just to truncate it."""
+    target = tmp_path / "big.txt"
+    target.write_text("x" * 1000, encoding="utf-8")
+
+    def fail(_path: Path) -> bytes:
+        raise AssertionError("the whole file was read")
+
+    monkeypatch.setattr(Path, "read_bytes", fail)
+    result = collect_artifacts(target, options=CollectorOptions(max_file_bytes=100))
+
+    assert len(result.files[0].content or "") == 100

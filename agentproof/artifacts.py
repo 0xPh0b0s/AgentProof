@@ -8,6 +8,7 @@ than a directory listing.
 
 from __future__ import annotations
 
+import os
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -143,8 +144,23 @@ class CollectorOptions:
     follow_symlinks: bool = False
 
 
+def _parse_gitignore(path: Path, base: str) -> list[IgnoreRule]:
+    """Parse a ``.gitignore`` file into rules anchored at ``base``."""
+    try:
+        lines = path.read_text(encoding="utf-8", errors="replace").splitlines()
+    except OSError:
+        return []
+
+    rules: list[IgnoreRule] = []
+    for line in lines:
+        rule = IgnoreRule.parse(line, base=base)
+        if rule is not None:
+            rules.append(rule)
+    return rules
+
+
 def load_gitignore_rules(root: Path, matcher_excludes: list[str]) -> list[IgnoreRule]:
-    """Collect ignore rules from the workspace root and its subdirectories.
+    """Collect the default excludes, explicit excludes, and root ignore rules.
 
     Args:
         root: The workspace root.
@@ -160,18 +176,7 @@ def load_gitignore_rules(root: Path, matcher_excludes: list[str]) -> list[Ignore
         if rule is not None:
             rules.append(rule)
 
-    if not (root / ".gitignore").is_file():
-        return rules
-
-    try:
-        lines = (root / ".gitignore").read_text(encoding="utf-8", errors="replace").splitlines()
-    except OSError:
-        return rules
-
-    for line in lines:
-        rule = IgnoreRule.parse(line)
-        if rule is not None:
-            rules.append(rule)
+    rules.extend(_parse_gitignore(root / ".gitignore", ""))
     return rules
 
 
@@ -187,7 +192,10 @@ def _read_text(path: Path, limit: int) -> tuple[str | None, bool, bool]:
         ``None`` for binary files.
     """
     try:
-        raw = path.read_bytes()
+        with path.open("rb") as handle:
+            # One extra byte is enough to detect truncation without reading
+            # a potentially huge file to the end.
+            raw = handle.read(limit + 1)
     except OSError:
         return None, False, False
 
@@ -205,26 +213,49 @@ def _read_text(path: Path, limit: int) -> tuple[str | None, bool, bool]:
         return sample.decode("utf-8", errors="replace"), truncated, False
 
 
-def _iter_files(directory: Path, matcher: PathMatcher) -> list[Path]:
+def _iter_files(
+    directory: Path,
+    matcher: PathMatcher,
+    *,
+    use_gitignore: bool,
+    follow_symlinks: bool,
+) -> list[Path]:
     """Return every non-ignored file under ``directory``.
+
+    Ignored directories are pruned during the walk, and nested ``.gitignore``
+    files are loaded as their directory is reached so their rules apply to the
+    subtree below them.
 
     Args:
         directory: Directory to walk.
         matcher: Matcher carrying the ignore rules.
+        use_gitignore: Whether nested ``.gitignore`` files are honoured.
+        follow_symlinks: Whether symlinked directories are descended into.
 
     Returns:
         A sorted list of file paths.
     """
     collected: list[Path] = []
-    for path in sorted(directory.rglob("*")):
-        rel = relative_to(path, directory)
-        if matcher.is_ignored(rel, is_dir=path.is_dir()):
-            continue
-        if path.is_dir():
-            continue
-        if path.is_symlink() and not path.exists():
-            continue
-        collected.append(path)
+    for current, dirnames, filenames in os.walk(directory, followlinks=follow_symlinks):
+        current_path = Path(current)
+        if use_gitignore and current_path != directory and ".gitignore" in filenames:
+            base = relative_to(current_path, directory)
+            matcher.rules.extend(_parse_gitignore(current_path / ".gitignore", base))
+
+        kept: list[str] = []
+        for name in sorted(dirnames):
+            path = current_path / name
+            if not follow_symlinks and path.is_symlink():
+                continue
+            if matcher.is_ignored(relative_to(path, directory), is_dir=True):
+                continue
+            kept.append(name)
+        dirnames[:] = kept
+
+        for name in sorted(filenames):
+            path = current_path / name
+            if not matcher.is_ignored(relative_to(path, directory), is_dir=False):
+                collected.append(path)
     return collected
 
 
@@ -275,7 +306,12 @@ def collect_artifacts(
             base = root
             rules = load_gitignore_rules(root, opts.exclude) if opts.use_gitignore else []
             matcher = PathMatcher(rules, includes=opts.include, excludes=opts.exclude)
-            candidates = _iter_files(root, matcher)
+            candidates = _iter_files(
+                root,
+                matcher,
+                use_gitignore=opts.use_gitignore,
+                follow_symlinks=opts.follow_symlinks,
+            )
 
         for path in candidates:
             resolved = path.resolve()
@@ -314,10 +350,9 @@ def collect_artifacts(
             content, truncated, is_binary = _read_text(path, read_limit)
             if content is not None:
                 result.total_bytes += len(content.encode("utf-8", errors="replace"))
-            else:
-                # Charge only the inspected sample. Counting a binary file's full
-                # size would let a single large blob starve textual evidence.
-                result.total_bytes += min(stat.st_size, read_limit)
+            # Binary content is never shown to the auditor, so it does not
+            # spend the text budget; a large blob cannot crowd out readable
+            # evidence that appears later in the walk.
 
             if is_binary:
                 kind = "binary"
