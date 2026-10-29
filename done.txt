@@ -1,0 +1,9 @@
+x 2026-10-22 2026-10-22 Ask AI if there are still large areas that need Improvement +AgentProof
+x 2026-10-23 2026-10-22 Fix guard rail so SUCCESS with zero checks is downgraded to FAILED @core +AgentProof due:2026-10-23
+x 2026-10-24 2026-10-22 Surface skipped/truncated/budget_exhausted evidence in the auditor prompt and JSON report @core +AgentProof due:2026-10-24
+x 2026-10-24 2026-10-22 Add regression tests for zero-check bypass, binary budget, marker spoofing, bad env values, .env precedence @tests +AgentProof due:2026-10-24
+x 2026-10-25 2026-10-22 Make config errors exit 2: catch ValueError, validate --config, nearest .env wins, chmod 600 .env @config +AgentProof due:2026-10-25
+x 2026-10-28 2026-10-22 Fix collector: prune ignored dirs, read only the limit, keep text budget ahead of binaries, load nested .gitignore @artifacts +AgentProof due:2026-10-28
+x 2026-10-24 2026-10-22 Harden artifact framing with a per-run nonce or length prefix and add an injection test @security +AgentProof due:2026-10-27
+x 2026-10-28 2026-10-22 Add py.typed and single-source the version via importlib.metadata @packaging +AgentProof due:2026-10-28
+x 2026-10-28 2026-10-22 Add coverage gate (--cov-fail-under=80) and tests for provider error paths @ci +AgentProof due:2026-10-28
